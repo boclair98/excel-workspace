@@ -1,0 +1,17 @@
+version: "1"
+mode: native
+services:
+  web:
+    dockerfile: Dockerfile
+    context: .
+    port: 8080
+    expose: public
+    env:
+      CODERS_NATIVE: "true"
+      ANTHROPIC_BASE_URL: ${ai.url}
+      ANTHROPIC_API_KEY: ${ai.token}
+      AI_MODEL: claude-haiku-5-5
+  ai:
+    type: llm
+    models: [claude-haiku-5-5]
+    default_model: claude-haiku-5-5

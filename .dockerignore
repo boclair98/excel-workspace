@@ -1,0 +1,12 @@
+.git
+node_modules
+dist
+.env
+.env.*
+.coders
+test-results
+playwright-report
+screenshots
+*.log
+*.xlsx
+*.csv
