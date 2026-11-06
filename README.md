@@ -8,9 +8,9 @@ Microsoft Excel의 공식 제품이나 제휴 서비스가 아닙니다. 개인 
 |---|---|
 | 버전 | `0.1.0` |
 | 운영 예정 주소 | https://excel-workspace.coders.kr |
-| Coders 배포 | 준비 중 — `ready` 및 운영 기능 검증 전 |
+| Coders 배포 | 소유자 배포 인증 갱신 대기 — 운영 배포 시작 전 |
 | canonical 저장소 | https://github.com/boclair98/excel-workspace |
-| 조직 fork | https://github.com/coders-kr/excel-workspace — 실제 fork 관계와 SHA 확인 전 |
+| 조직 fork | https://github.com/coders-kr/excel-workspace — `boclair98/excel-workspace`의 실제 GitHub fork |
 
 로컬 구현·검증을 완료했습니다. 기존 Coders 인증이 HTTP 401을 반환하여 게시 인증 갱신을 기다리고 있습니다. 운영 배포 상태와 실제 AI 응답은 아직 검증하지 않았습니다.
 
@@ -242,7 +242,7 @@ gh api repos/coders-kr/excel-workspace/commits/main --jq .sha
 - [x] 리본 방향키·Shift+Tab·Enter·Escape와 핵심 파일/서식 흐름 — E2E 4개 통과
 - [x] 검증 흐름의 브라우저 페이지 오류 없음
 - [ ] AI 미연결·로그인 필요·한도·실패 안내, 실제 제안 검토·적용
-- [ ] 실제 GitHub fork 부모 관계와 양쪽 기본 브랜치 전체 SHA 일치
+- [x] 실제 GitHub fork 부모 관계 확인. 매 게시 시 양쪽 `main` 전체 SHA를 비교하여 동기화
 - [ ] 해당 배포의 `ready`와 운영 URL 확인
 
 물리 휴대전화, 모든 브라우저, 모든 Microsoft Excel 버전, 모든 함수 및 복잡한 문서의 호환성을 검증했다고 주장하지 않습니다.

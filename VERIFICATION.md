@@ -26,7 +26,7 @@
 
 개인 API 키는 생성·등록·포함하지 않았다. 서버에는 Coders 관리형 Claude 연결 코드와 모델 allow-list가 있다. 로컬 모의 제공자 테스트는 실제 모델 응답 검증과 구분한다. 실제 AI 추론은 운영 연결 후 별도 검증해야 한다.
 
-기존 Coders 에이전트 인증이 HTTP 401을 반환하여 소유자 인증 갱신을 요청했다. 운영 배포의 `ready`, 운영 URL 기능, 관리형 AI 실제 응답은 현재 미확인이다. GitHub upstream과 조직 fork의 게시·동기화 결과는 README 상태표를 기준으로 갱신한다.
+기존 Coders 에이전트 인증이 HTTP 401을 반환하여 소유자 인증 갱신을 요청했다. 운영 배포의 `ready`, 운영 URL 기능, 관리형 AI 실제 응답은 현재 미확인이다. `boclair98/excel-workspace` 공개 저장소 게시와 `coders-kr/excel-workspace`의 실제 GitHub fork 생성을 완료했고 부모 관계를 API로 확인했다. 배포 소스는 canonical 저장소이며 매 게시 후 조직 fork를 동기화한다.
 
 ## 남아 있는 범위
 
