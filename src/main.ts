@@ -26,12 +26,22 @@ import {
   Trash2,
   Copy,
   Settings2,
+  History,
+  Pencil,
 } from "lucide";
 import { newBook, validateBook, LIMITS, cellText } from "./model";
-import { listBooks, saveBook, deleteBook, type SavedBook } from "./storage";
+import {
+  listBooks,
+  saveBook,
+  deleteBook,
+  StorageConflictError,
+  type SavedBook,
+} from "./storage";
 import type { IWorkbookData } from "@univerjs/core";
 import type { Editor } from "./editor";
 import { mountRibbon } from "./ribbon";
+import { openHistory } from "./history";
+import { openDataTools } from "./data-tools";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -72,6 +82,8 @@ function icons() {
       Trash2,
       Copy,
       Settings2,
+      History,
+      Pencil,
     },
     attrs: { "stroke-width": 1.7 },
   });
@@ -79,11 +91,11 @@ function icons() {
 $("app").innerHTML = `
 <header class="topbar"><div class="brand">${icon("table-2")}<h1>오픈소스 엑셀</h1><span class="beta">BETA</span></div><div class="document-heading"><button id="rename" title="통합문서 이름 변경"><span id="document-name">새 통합문서</span>${icon("chevron-down")}</button><span id="save-state" role="status">이 브라우저에 자동 보관</span></div><button class="icon-btn" id="help" aria-label="이용 안내">${icon("help-circle")}</button></header>
 <nav class="filebar" aria-label="파일 도구"><div class="file-actions"><button id="library-toggle" class="icon-btn" aria-label="내 통합문서 열기">${icon("panel-left")}</button><span class="separator"></span><button id="new">${icon("plus")}새 문서</button><button id="open">${icon("folder-open")}열기</button><button id="save">${icon("save")}보관</button><button id="export" class="primary">${icon("download")}XLSX 저장</button><button id="csv" class="small-action">CSV</button></div><button id="ai-open" class="ai-trigger">${icon("sparkles")}<span>AI 도우미</span></button></nav>
-<div class="workspace"><aside id="sidebar" class="sidebar" aria-label="내 통합문서"><div class="side-top"><h2>내 통합문서</h2><span id="book-count">0</span></div><label class="search">${icon("search")}<input id="search" type="search" placeholder="이름으로 찾기" aria-label="보관한 통합문서 검색"></label><div class="library" id="library"></div><div class="side-bottom"><button id="example">${icon("file-spreadsheet")}예시 가계부 열기</button><button id="backup">${icon("download")}현재 문서 백업</button><a href="https://github.com/boclair98/excel-workspace" target="_blank" rel="noopener">소스 코드 보기 ${icon("arrow-up-right")}</a><p>${icon("shield-check")}문서는 이 브라우저에 보관돼요.<br>중요한 파일은 내려받아 주세요.</p></div></aside>
+<div class="workspace"><aside id="sidebar" class="sidebar" aria-label="내 통합문서"><div class="side-top"><h2>내 통합문서</h2><span id="book-count">0</span></div><label class="search">${icon("search")}<input id="search" type="search" placeholder="이름으로 찾기" aria-label="보관한 통합문서 검색"></label><div class="library" id="library"></div><div class="side-bottom"><button id="example">${icon("file-spreadsheet")}예시 가계부 열기</button><button id="history">${icon("history")}복구 지점</button><button id="backup">${icon("download")}현재 문서 백업</button><a href="https://github.com/boclair98/excel-workspace" target="_blank" rel="noopener">소스 코드 보기 ${icon("arrow-up-right")}</a><p>${icon("shield-check")}문서는 이 브라우저에 보관돼요.<br>중요한 파일은 내려받아 주세요.</p></div></aside>
 <main class="editor-area" id="editor-area" aria-label="스프레드시트 편집기"><div class="quickbar" role="toolbar" aria-label="간편 편집"><button id="undo" class="icon-btn" aria-label="실행 취소">${icon("undo-2")}</button><button id="redo" class="icon-btn" aria-label="다시 실행">${icon("redo-2")}</button><span class="separator"></span><button id="bold" class="icon-btn" aria-label="굵게">${icon("bold")}</button><button id="italic" class="icon-btn" aria-label="기울임">${icon("italic")}</button><label class="sr-only" for="font-size">글자 크기</label><select id="font-size"><option>10</option><option selected>11</option><option>12</option><option>14</option><option>16</option><option>20</option><option>24</option></select><label class="sr-only" for="number-format">표시 형식</label><select id="number-format"><option value="General">일반</option><option value="#,##0">숫자</option><option value="₩#,##0">원화</option><option value="0.0%">백분율</option><option value="yyyy-mm-dd">날짜</option></select><span class="separator"></span><button id="filter" title="선택한 범위에 필터 설정">${icon("filter")}필터</button><button id="sort" title="선택한 범위를 첫 열 기준으로 오름차순 정렬">${icon("arrow-up-a-z")}정렬</button><button id="full-tools" aria-pressed="false">${icon("settings-2")}전체 도구</button></div>
 <form class="formula" id="cell-form"><label class="sr-only" for="address">셀 주소 또는 범위</label><input id="address" value="A1" spellcheck="false" aria-label="셀 주소 또는 범위"><span class="fx" aria-hidden="true">ƒx</span><label class="sr-only" for="cell-input">셀 내용 또는 수식</label><textarea id="cell-input" rows="1" placeholder="셀 내용 또는 =SUM(A1:A10)" autocomplete="off" aria-description="Enter로 입력, Alt+Enter 또는 Shift+Enter로 줄 바꿈"></textarea><button type="submit" class="icon-btn" aria-label="셀에 입력">${icon("check")}</button></form>
-<div class="sheet-stage"><div id="editor"></div><div id="loading" class="loading" role="status"><span class="spinner"></span><strong>통합문서를 준비하고 있어요</strong><span>표와 수식을 불러오는 중입니다.</span></div><div class="start-hint" id="start-hint"><strong>빈 셀에서 시작하세요.</strong><span>더블 클릭해 입력하거나, 엑셀 파일을 열어 이어서 작업하세요.</span><button id="hint-example">예시 가계부로 둘러보기 →</button><button id="hint-close" class="icon-btn" aria-label="시작 안내 닫기">${icon("x")}</button></div></div>
-<footer class="statusbar"><span id="selection-status">A1 선택</span><span>Univer 기반 · 파일은 기기에 저장</span></footer></main></div>
+<output id="formula-help" class="formula-help" hidden></output><div id="save-conflict" class="save-conflict" role="alert" hidden><div><strong>다른 탭에서 이 문서가 변경됐어요.</strong><span>내 변경을 사본으로 보관하거나 최신 보관본을 열어 주세요.</span></div><div class="conflict-actions"><button id="conflict-copy" class="primary">내 변경 사본 보관</button><button id="conflict-reload">최신 보관본 열기</button></div></div><div class="sheet-stage"><div id="editor"></div><div id="loading" class="loading" role="status"><span class="spinner"></span><strong>통합문서를 준비하고 있어요</strong><span>표와 수식을 불러오는 중입니다.</span></div><div class="start-hint" id="start-hint"><strong>빈 셀에서 시작하세요.</strong><span>더블 클릭해 입력하거나, 엑셀 파일을 열어 이어서 작업하세요.</span><button id="hint-example">예시 가계부로 둘러보기 →</button><button id="hint-close" class="icon-btn" aria-label="시작 안내 닫기">${icon("x")}</button></div></div>
+<nav class="sheetbar" aria-label="시트 탐색"><div id="sheet-tabs" class="sheet-tabs" role="tablist" aria-label="통합문서 시트"></div><label class="sr-only" for="sheet-picker">현재 시트</label><select id="sheet-picker" aria-label="현재 시트"></select><button id="sheet-add" class="icon-btn" aria-label="시트 추가" title="시트 추가">${icon("plus")}</button><button id="sheet-rename" class="icon-btn" aria-label="시트 이름 변경" title="시트 이름 변경">${icon("pencil")}</button><label class="sr-only" for="sheet-zoom">시트 확대 배율</label><select id="sheet-zoom" aria-label="시트 확대 배율"><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></nav><footer class="statusbar"><span id="selection-status">A1 선택</span><span>Univer 기반 · 파일은 기기에 저장</span></footer></main></div>
 <div id="toast" role="status" class="toast" hidden></div>
 <input type="file" id="file" accept=".xlsx,.csv,.json" hidden>
 <dialog id="library-dialog" class="library-dialog" aria-label="내 통합문서"><button class="dialog-close icon-btn" data-close="library-dialog" aria-label="보관함 닫기">${icon("x")}</button><div id="library-host"></div></dialog>
@@ -100,12 +112,18 @@ let editor: Editor,
   toastTimer: ReturnType<typeof setTimeout>,
   saving: Promise<void> = Promise.resolve(),
   loading = false;
+const knownVersions = new Map<string, number | null>();
+let conflictBookId: string | null = null;
+let sheetSignature = "";
 let aiTarget:
     | { book: string; sheet: string; address: string; previous: string }
     | undefined,
   formula: string | null = null;
 const toast = (text: string, error = false) => {
-  const host = document.querySelector("dialog[open]") ?? document.body;
+  const host =
+    document.activeElement?.closest("dialog[open]") ??
+    Array.from(document.querySelectorAll("dialog[open]")).at(-1) ??
+    document.body;
   host.append($("toast"));
   $("toast").textContent = text;
   $("toast").className = "toast" + (error ? " error" : "");
@@ -130,6 +148,17 @@ const run = (fn: () => unknown) => async () => {
 const bind = (id: string, fn: () => unknown) =>
   $(id).addEventListener("click", run(fn));
 mountRibbon({ editor: () => editor, changed: onChange, modal, toast });
+document.addEventListener("data-tools", (event) => {
+  run(() =>
+    openDataTools(
+      editor,
+      onChange,
+      toast,
+      (event as CustomEvent).detail === "trim" ? "trim" : "find",
+    ),
+  )();
+});
+document.addEventListener("add-sheet", run(addSheet));
 document.addEventListener(
   "duplicate-workbook",
   run(async () => {
@@ -145,6 +174,11 @@ function onChange() {
   if (!editor || loading) return;
   dirty = true;
   revision++;
+  updateSheets();
+  if (conflictBookId === editor.current().getId()) {
+    $("save-state").textContent = "저장 충돌 · 사본 보관이 필요해요";
+    return;
+  }
   $("save-state").textContent = "변경 사항 보관 중…";
   $("start-hint").hidden = true;
   clearTimeout(autoTimer);
@@ -180,16 +214,196 @@ function onSelection() {
           nums.push(value);
       }
     }
-    if (nums.length)
-      message += ` · 합계 ${nums.reduce((a, b) => a + b, 0).toLocaleString("ko-KR", { maximumFractionDigits: 6 })}`;
+    if (nums.length) {
+      const sum = nums.reduce((a, b) => a + b, 0);
+      const format = (n: number) =>
+        n.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
+      message += ` · 숫자 ${nums.length.toLocaleString()}개 · 합계 ${format(sum)} · 평균 ${format(sum / nums.length)}`;
+    }
   }
   $("selection-status").textContent = message;
+  updateSheets();
 }
 async function refreshLibrary() {
   books = await listBooks();
   $("book-count").textContent = String(books.length);
   renderLibrary();
 }
+function updateSheets() {
+  if (!editor) return;
+  const current = editor.current();
+  const active = current.getActiveSheet();
+  const sheets = current.getSheets().filter((sheet) => !sheet.isSheetHidden());
+  const signature =
+    JSON.stringify(
+      sheets.map((sheet) => [sheet.getSheetId(), sheet.getSheetName()]),
+    ) + active.getSheetId();
+  if (signature !== sheetSignature) {
+    sheetSignature = signature;
+    $("sheet-tabs").innerHTML = sheets
+      .map((sheet) => {
+        const selected = sheet.getSheetId() === active.getSheetId();
+        return `<button role="tab" data-sheet="${esc(sheet.getSheetId())}" aria-selected="${selected}" tabindex="${selected ? 0 : -1}">${esc(sheet.getSheetName())}</button>`;
+      })
+      .join("");
+    $("sheet-picker").innerHTML = sheets
+      .map(
+        (sheet) =>
+          `<option value="${esc(sheet.getSheetId())}">${esc(sheet.getSheetName())}</option>`,
+      )
+      .join("");
+    ($("sheet-picker") as HTMLSelectElement).value = active.getSheetId();
+    $("sheet-tabs")
+      .querySelector('[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  for (const id of ["sheet-zoom", "zoom"]) {
+    const select = $(id) as HTMLSelectElement;
+    const zoom = String(active.getZoom());
+    for (const option of select.querySelectorAll("[data-custom]"))
+      option.remove();
+    if (!Array.from(select.options).some((option) => option.value === zoom)) {
+      const option = new Option(`${Math.round(active.getZoom() * 100)}%`, zoom);
+      option.dataset.custom = "true";
+      select.add(option);
+    }
+    select.value = zoom;
+  }
+}
+function activateSheet(id: string) {
+  editor.current().setActiveSheet(id);
+  onSelection();
+}
+function addSheet() {
+  if (editor.current().getSheets().length >= LIMITS.sheets)
+    throw new Error(
+      `통합문서에는 최대 ${LIMITS.sheets}개 시트를 만들 수 있어요.`,
+    );
+  const sheet = editor.current().insertSheet();
+  editor.current().setActiveSheet(sheet);
+  onChange();
+  onSelection();
+}
+$("sheet-tabs").addEventListener("click", (event) => {
+  const id = (event.target as HTMLElement).closest<HTMLElement>("[data-sheet]")
+    ?.dataset.sheet;
+  if (id) run(() => activateSheet(id))();
+});
+$("sheet-tabs").addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const buttons = Array.from(
+    $("sheet-tabs").querySelectorAll<HTMLButtonElement>("button"),
+  );
+  const index = buttons.indexOf(event.target as HTMLButtonElement);
+  if (index < 0) return;
+  event.preventDefault();
+  const next =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? buttons.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) %
+          buttons.length;
+  const id = buttons[next].dataset.sheet!;
+  run(() => {
+    activateSheet(id);
+    $("sheet-tabs")
+      .querySelector<HTMLButtonElement>('[aria-selected="true"]')
+      ?.focus();
+  })();
+});
+$("sheet-picker").addEventListener(
+  "change",
+  run(() => activateSheet(($("sheet-picker") as HTMLSelectElement).value)),
+);
+bind("sheet-add", addSheet);
+bind("sheet-rename", async () => {
+  const sheet = editor.current().getActiveSheet();
+  if (
+    !(await modal(
+      "시트 이름 변경",
+      `<label for="sheet-name">시트 이름</label><input id="sheet-name" maxlength="31" value="${esc(sheet.getSheetName())}" required autofocus><p class="muted">최대 31자. : \\ / ? * [ ] 문자는 사용할 수 없어요.</p>`,
+      "이름 변경",
+    ))
+  )
+    return;
+  const name = ($("sheet-name") as HTMLInputElement).value.trim();
+  if (
+    !name ||
+    /[:\\/?*\[\]]/.test(name) ||
+    name.startsWith("'") ||
+    name.endsWith("'")
+  )
+    throw new Error("올바른 시트 이름을 입력해 주세요.");
+  if (
+    editor
+      .current()
+      .getSheets()
+      .some(
+        (other) =>
+          other.getSheetId() !== sheet.getSheetId() &&
+          other.getSheetName().toLowerCase() === name.toLowerCase(),
+      )
+  )
+    throw new Error("같은 이름의 시트가 있어요. 다른 이름을 입력해 주세요.");
+  sheet.setName(name);
+  onChange();
+  toast("시트 이름을 변경했습니다.");
+});
+$("sheet-zoom").addEventListener(
+  "change",
+  run(() => {
+    editor
+      .current()
+      .getActiveSheet()
+      .zoom(Number(($("sheet-zoom") as HTMLSelectElement).value));
+    updateSheets();
+  }),
+);
+bind("history", () =>
+  openHistory({
+    snapshot: () => editor.snapshot(),
+    save: async () => {
+      await saveCurrent(false);
+    },
+    restore: async (book) => {
+      await openBook(book);
+      await saveCurrent(false);
+      closeLibrary();
+    },
+    toast,
+  }),
+);
+bind("conflict-copy", async () => {
+  await saving.catch(() => {});
+  const copy = editor.snapshot();
+  copy.id = crypto.randomUUID();
+  copy.name = copy.name.slice(0, 89) + " 내 변경 사본";
+  await saveBook(copy, { expectedUpdatedAt: null });
+  await refreshLibrary();
+  await openBook(copy, false);
+  toast(
+    "내 변경을 별도 사본으로 보관했습니다. 기존 문서의 최신 보관본은 유지됩니다.",
+  );
+});
+bind("conflict-reload", async () => {
+  if (
+    !(await modal(
+      "최신 보관본 열기",
+      "<p>이 탭의 미보관 변경을 버리고 다른 탭의 최신 보관본을 엽니다. 변경을 유지하려면 취소하고 ‘내 변경 사본 보관’을 눌러 주세요.</p>",
+      "최신 보관본 열기",
+    ))
+  )
+    return;
+  await saving.catch(() => {});
+  await refreshLibrary();
+  const latest = books.find((book) => book.id === editor.current().getId());
+  if (!latest)
+    throw new Error(
+      "다른 탭에서 보관본이 삭제됐어요. 내 변경을 사본으로 보관해 주세요.",
+    );
+  await openBook(structuredClone(latest.book), false);
+});
 function renderLibrary() {
   const query = ($("search") as HTMLInputElement).value.trim().toLowerCase();
   const matched = books.filter((b) => b.name.toLowerCase().includes(query));
@@ -212,7 +426,10 @@ async function saveCurrent(notify = true) {
     .catch(() => {})
     .then(async () => {
       try {
-        await saveBook(snapshot);
+        const saved = await saveBook(snapshot, {
+          expectedUpdatedAt: knownVersions.get(snapshot.id) ?? null,
+        });
+        knownVersions.set(snapshot.id, saved.updatedAt);
         if (editor.current().getId() === snapshot.id && revision === version) {
           dirty = false;
           $("save-state").textContent = "이 브라우저에 보관됨";
@@ -228,7 +445,16 @@ async function saveCurrent(notify = true) {
             "이 브라우저에 보관했습니다. 파일 저장은 별도로 내려받아 주세요.",
           );
       } catch (e) {
-        $("save-state").textContent = "보관 실패 · 파일을 내려받아 주세요";
+        if (
+          e instanceof StorageConflictError &&
+          editor.current().getId() === snapshot.id
+        ) {
+          conflictBookId = snapshot.id;
+          $("save-conflict").hidden = false;
+          $("save-state").textContent = "저장 충돌 · 사본 보관이 필요해요";
+          clearTimeout(autoTimer);
+        } else
+          $("save-state").textContent = "보관 실패 · 파일을 내려받아 주세요";
         throw e;
       }
     });
@@ -242,11 +468,15 @@ async function openBook(book: IWorkbookData, savePrevious = true) {
   validateBook(book);
   if (savePrevious && dirty) await saveCurrent(false);
   clearTimeout(autoTimer);
+  knownVersions.set(
+    book.id,
+    books.find((b) => b.id === book.id)?.updatedAt ?? null,
+  );
   loading = true;
   $("loading").hidden = false;
   $("editor-area").setAttribute("aria-busy", "true");
   for (const el of document.querySelectorAll<HTMLElement>(
-    ".ribbon,.filebar,#cell-form",
+    ".ribbon,.filebar,#cell-form,.sheetbar",
   ))
     el.inert = true;
   try {
@@ -258,6 +488,9 @@ async function openBook(book: IWorkbookData, savePrevious = true) {
     $("document-name").textContent = book.name;
     document.title = `${book.name} · 오픈소스 엑셀`;
     dirty = false;
+    conflictBookId = null;
+    $("save-conflict").hidden = true;
+    sheetSignature = "";
     revision++;
     $("save-state").textContent = books.some((b) => b.id === book.id)
       ? "이 브라우저에 보관됨"
@@ -271,7 +504,7 @@ async function openBook(book: IWorkbookData, savePrevious = true) {
     $("loading").hidden = true;
     $("editor-area").removeAttribute("aria-busy");
     for (const el of document.querySelectorAll<HTMLElement>(
-      ".ribbon,.filebar,#cell-form",
+      ".ribbon,.filebar,#cell-form,.sheetbar",
     ))
       el.inert = false;
   }
@@ -539,8 +772,32 @@ $("cell-form").addEventListener("submit", (e) => {
 function resizeFormulaInput() {
   const input = $("cell-input") as HTMLTextAreaElement;
   input.rows = Math.min(3, Math.max(1, input.value.split("\n").length));
+  const functionName = input.value
+    .match(/^=\s*([A-Z]+)\s*\(/i)?.[1]
+    .toUpperCase();
+  const hints: Record<string, string> = {
+    SUM: "SUM(범위) · 숫자를 더해요. 예: =SUM(B2:B10)",
+    AVERAGE: "AVERAGE(범위) · 숫자의 평균을 구해요. 빈 셀은 제외해요.",
+    IF: 'IF(조건, 참일 때, 거짓일 때) · 예: =IF(B2>=60,"통과","재검토")',
+    COUNT: "COUNT(범위) · 숫자가 있는 셀의 개수를 세요.",
+    COUNTA: "COUNTA(범위) · 비어 있지 않은 셀의 개수를 세요.",
+    SUMIF:
+      'SUMIF(조건 범위, 조건, 합계 범위) · 예: =SUMIF(A2:A10,"완료",B2:B10)',
+    COUNTIF: 'COUNTIF(범위, 조건) · 예: =COUNTIF(A2:A10,"완료")',
+    IFERROR: "IFERROR(계산, 오류일 때) · 예: =IFERROR(A2/B2,0)",
+    ROUND: "ROUND(숫자, 자릿수) · 예: =ROUND(B2,2)",
+    VLOOKUP:
+      "VLOOKUP(찾을 값, 표 범위, 열 번호, FALSE) · 표의 첫 열에서 정확히 일치하는 값을 찾아요.",
+  };
+  const hint = functionName && hints[functionName];
+  $("formula-help").textContent = hint ? `함수 도움말 · ${hint}` : "";
+  $("formula-help").hidden = !hint || document.activeElement !== input;
 }
 $("cell-input").addEventListener("input", resizeFormulaInput);
+$("cell-input").addEventListener("focus", resizeFormulaInput);
+$("cell-input").addEventListener("blur", () => {
+  $("formula-help").hidden = true;
+});
 $("cell-input").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" || e.isComposing) return;
   if (e.altKey) {
@@ -705,6 +962,17 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 document.addEventListener("keydown", (e) => {
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    ["f", "h"].includes(e.key.toLowerCase()) &&
+    editor &&
+    !loading &&
+    !document.querySelector("dialog[open]")
+  ) {
+    e.preventDefault();
+    run(() => openDataTools(editor, onChange, toast, "find"))();
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
     e.preventDefault();
     run(() => saveCurrent())();

@@ -45,6 +45,7 @@ export function createEditor(
         header: false,
         toolbar: false,
         formulaBar: false,
+        footer: false,
         disableAutoFocus: true,
       }),
       UniverSheetsFilterPreset(),
