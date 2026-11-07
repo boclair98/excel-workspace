@@ -6,13 +6,13 @@ Microsoft Excel과 별도로 개발한 앱입니다. 한국어 AI 채팅에서 �
 
 | 배포 정보 | 상태 |
 |---|---|
-| 소스 버전 | `0.7.0` |
+| 소스 버전 | `0.8.0` |
 | 운영 주소 | https://excel-workspace.coders.kr |
 | Coders 배포 | 운영 중 · [공개 헬스 확인](https://excel-workspace.coders.kr/healthz) |
 | canonical 저장소 | https://github.com/boclair98/excel-workspace |
 | 조직 fork | https://github.com/coders-kr/excel-workspace — `boclair98/excel-workspace`의 실제 GitHub fork |
 
-v0.7에서는 AI 채팅에 요청한 값과 수식을 검증 후 시트에 바로 반영합니다. PC에서는 시트 옆에 AI 패널을 열어 두고 편집할 수 있습니다. 안내문과 신청서는 필요한 항목만 채워 초안을 받습니다. Coders에 로그인하면 운영자 OpenAI 연결을 사용할 수 있습니다. [검증 기록](VERIFICATION.md)
+v0.8은 PC 제목줄·리본·수식줄·시트 탐색을 더 촘촘하게 배치하고 하단 빈 공간을 줄입니다. 새 빈 통합문서는 96px 열·22px 행으로 시작하며, 기존 파일의 크기는 유지합니다. AI는 기본 닫힘이고 필요할 때 열어 사용하는 보조 채팅입니다. AI 채팅에 요청한 값과 수식을 검증 후 시트에 바로 반영합니다. PC에서는 시트 옆에 AI 패널을 열어 두고 편집할 수 있습니다. 안내문과 신청서는 필요한 항목만 채워 초안을 받습니다. Coders에 로그인하면 운영자 OpenAI 연결을 사용할 수 있습니다. [검증 기록](VERIFICATION.md)
 
 ![실제 데스크톱 엑셀 편집 화면](screenshots/editor-desktop.png)
 

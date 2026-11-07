@@ -101,10 +101,10 @@ export function newBook(example = false): IWorkbookData {
         name: example ? "가계부" : "시트1",
         rowCount: 200,
         columnCount: 26,
-        defaultColumnWidth: 120,
-        defaultRowHeight: 30,
+        defaultColumnWidth: example ? 120 : 96,
+        defaultRowHeight: example ? 30 : 22,
         cellData: cells,
-        columnData: { 2: { w: 180 } },
+        columnData: example ? { 2: { w: 180 } } : {},
       },
     },
   };

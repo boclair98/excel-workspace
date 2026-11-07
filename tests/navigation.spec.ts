@@ -70,7 +70,7 @@ test("sheet navigation, renaming, numeric summary and formula help work on deskt
       .toBe(true);
     for (const id of ["#sheet-add", "#sheet-rename", "#sheet-zoom"]) {
       const box = await page.locator(id).boundingBox();
-      expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(viewport.width <= 800 ? 44 : 32);
     }
     if (viewport.width <= 800) {
       await expect(page.locator("#sheet-picker")).toBeVisible();
@@ -135,4 +135,11 @@ test("the hosted support button leaves sheet controls accessible", async ({
     await page.keyboard.press("Escape");
     await expect(page.locator("#sheet-manage")).toBeFocused();
   }
+  const grid = (await page.locator('.sheet-stage').boundingBox())!;
+  expect(grid.height).toBeGreaterThan(600);
+  expect(grid.width).toBeGreaterThan(1400);
+  await page.locator('#ai-open').click();
+  const chat = (await page.locator('#ai-dialog').boundingBox())!;
+  const widget = (await page.locator('[data-coders-support]').boundingBox())!;
+  expect(widget.x + widget.width).toBeLessThanOrEqual(chat.x);
 });

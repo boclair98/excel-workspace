@@ -303,7 +303,9 @@ function addSheet() {
     throw new Error(
       `통합문서에는 최대 ${LIMITS.sheets}개 시트를 만들 수 있어요.`,
     );
-  const sheet = editor.current().insertSheet();
+  const sheet = editor.current().insertSheet(undefined, {
+    sheet: { defaultColumnWidth: 96, defaultRowHeight: 22 },
+  });
   editor.current().setActiveSheet(sheet);
   onChange();
   onSelection();

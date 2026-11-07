@@ -332,7 +332,7 @@ export function mountRibbon(options: Options) {
     accent: "green",
     density: "comfortable",
     layout: "wide",
-    "ai-width": "wide",
+    "ai-width": "compact",
   };
   const displayKey = "excel-workspace-display";
   const applyPreferences = () => {
