@@ -344,7 +344,7 @@ bind("sheet-add", addSheet);
 bind("sheet-manage", async () => {
   const target = editor;
   const { openSheetManager } = await import("./sheet-manager");
-  if (target !== editor || loading || document.querySelector("dialog[open]"))
+  if (target !== editor || loading || document.querySelector("dialog[open]:not(#ai-dialog)"))
     return;
   openSheetManager(target, updateAfterEdit, onSelection);
 });
@@ -802,7 +802,7 @@ function updateAfterEdit() {
 bind("sort", async () => {
   const target = editor;
   const { openSortTools } = await import("./sort-tools");
-  if (target !== editor || loading || document.querySelector("dialog[open]"))
+  if (target !== editor || loading || document.querySelector("dialog[open]:not(#ai-dialog)"))
     return;
   openSortTools(target, updateAfterEdit, toast);
 });
@@ -881,7 +881,7 @@ document.addEventListener("keydown", (e) => {
     ["f", "h"].includes(e.key.toLowerCase()) &&
     editor &&
     !loading &&
-    !document.querySelector("dialog[open]")
+    !document.querySelector("dialog[open]:not(#ai-dialog)")
   ) {
     e.preventDefault();
     run(() => openDataTools(editor, onChange, toast, "find"))();

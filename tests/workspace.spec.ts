@@ -175,14 +175,14 @@ test('guided notice uses plain chat, copies the draft and carries context into r
   await page.screenshot({ path: info.outputPath('ai-draft-desktop.png') });
   await page.keyboard.press('Escape');
   await expect(page.locator('#ai-open')).toBeFocused();
-  await expect(page.locator('#cell-input')).toHaveValue('채팅에 보내지 않을 셀');
+  await expect(page.locator('#cell-input')).toHaveValue(draft);
   await page.locator('#ai-open').click();
   await expect(answers.last()).toContainText(revision);
   await page.getByRole('button', { name: '새 대화' }).click();
   await expect(answers).toHaveCount(0);
 });
 
-test('one chat prompt previews values and a formula, applies them to XLSX and undoes together', async ({ page }, info) => {
+test('one chat prompt automatically applies values and a formula to XLSX and undoes together', async ({ page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const source = new ExcelJS.Workbook();
   const sheet = source.addWorksheet('채팅 적용 검증');
@@ -216,11 +216,10 @@ test('one chat prompt previews values and a formula, applies them to XLSX and un
   expect(requests[0].mode).toBe('chat');
   expect(JSON.parse(requests[0].context)).toEqual({ sheet: '채팅 적용 검증', range: 'B2:D3', values: [[12, '  접수  ', null], [null, null, 24]], formulas: [['', '', ''], ['', '', '=B2*2']] });
   await page.getByRole('button', { name: '보내기', exact: true }).click();
-  await expect(page.locator('.ai-plan-summary')).toHaveText('B2:D3 · 3개 셀 변경안');
+  await expect(page.locator('.ai-plan-summary')).toContainText('3개 셀을 적용했어요');
   await expect(page.getByRole('table')).toContainText('=SUM(B2:B3)');
-  await expect(page.getByRole('button', { name: '엑셀에 적용' })).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: info.outputPath('ai-sheet-preview.png') });
-  await page.getByRole('button', { name: '엑셀에 적용' }).click();
+  await page.getByRole('button', { name: 'AI 채팅 닫기' }).click();
   await expect(page.locator('#ai-dialog')).toBeHidden();
   const updated = (await downloadedBook(page, info, 'ai-updated.xlsx')).getWorksheet(1)!;
   expect(updated.getCell('A2').value).toBe('범위 밖 유지');
@@ -340,4 +339,40 @@ test('keyboard ribbon and personalization, honest disconnected AI without data t
   await expect(page.locator('.ai-message')).toHaveCount(0);
   expect(aiRequests).toBe(0);
   await page.screenshot({ path: info.outputPath('disconnected-ai.png') });
+});
+
+test('docked AI keeps sheet usable and text cursor stable while applying a table automatically', async ({ page }) => {
+  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'openai', managed: false, signedIn: true } }));
+  await page.route('**/api/ai', route => {
+    const input = route.request().postDataJSON();
+    expect(JSON.parse(input.context).range).toBe('A1:J20');
+    return route.fulfill({ json: { reply: '명단을 작성합니다.', edits: [
+      { address: 'A1', kind: 'set', value: '이름' },
+      { address: 'B1', kind: 'set', value: '수량' },
+      { address: 'B2', kind: 'set', value: 3 },
+    ] } });
+  });
+  await page.goto('/'); await ready(page);
+  await page.locator('#ai-open').click();
+  const prompt = page.getByLabel('메시지', { exact: true });
+  await expect(prompt).toBeFocused();
+  await prompt.fill('명단을 만들어줘');
+  await prompt.press('Home'); await prompt.press('ArrowRight');
+  const cursor = await prompt.evaluate((el: HTMLTextAreaElement) => el.selectionStart);
+  expect(cursor).toBe(1);
+  await prompt.press('Control+a');
+  await prompt.pressSequentially('table');
+  await expect(prompt).toHaveValue('table');
+  await prompt.fill('신청자 명단을 만들어줘');
+  const sheet = (await page.locator('.sheet-stage').boundingBox())!;
+  const chat = (await page.locator('#ai-dialog').boundingBox())!;
+  expect(sheet.x + sheet.width).toBeLessThanOrEqual(chat.x + 1);
+  await prompt.press('Enter');
+  await expect(page.locator('.ai-plan-summary')).toContainText('3개 셀을 적용했어요');
+  await expect(prompt).toBeFocused();
+  await selectCell(page, 'B2'); await expect(page.locator('#cell-input')).toHaveValue('3');
+  await page.locator('#undo').click();
+  await selectCell(page, 'B2'); await expect(page.locator('#cell-input')).toHaveValue('');
+  await page.locator('#ai-open').click(); await expect(prompt).toBeFocused();
+  await expect(page.locator('#ai-send')).toBeEnabled();
 });

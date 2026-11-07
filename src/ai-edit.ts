@@ -50,6 +50,17 @@ export function resolveAIRange(editor: Editor, prompt: string) {
     ([, col, row]) => `${col.toUpperCase()}${row}`,
   );
   let range = selected;
+  if (!addresses.length) {
+    const bounds = selected.getRange();
+    if (bounds.startRow === bounds.endRow && bounds.startColumn === bounds.endColumn) {
+      const rows = Math.min(20, sheet.getMaxRows() - bounds.startRow);
+      const cols = Math.min(10, sheet.getMaxColumns() - bounds.startColumn);
+      const candidate = sheet.getRange(bounds.startRow, bounds.startColumn, rows, cols);
+      const empty = candidate.getCellDataGrid().every(row => row.every(cell =>
+        cell?.v == null && !cell?.f && !cell?.p && !cell?.si));
+      if (empty) range = sheet.getRange(bounds.startRow, bounds.startColumn, rows, cols);
+    }
+  }
   if (addresses.length) {
     const cells = addresses.map((address) => sheet.getRange(address).getRange());
     const startRow = Math.min(...cells.map((cell) => cell.startRow));
@@ -153,7 +164,7 @@ export function reviewAIChanges(
     const scalar =
       typeof after === "boolean" ||
       (typeof after === "number" && Number.isFinite(after)) ||
-      (typeof after === "string" && after.length <= 2000);
+      (typeof after === "string" && after.length <= 6000);
     if (
       !(edit.kind === "set" && scalar) &&
       !(edit.kind === "clear" && after === null) &&

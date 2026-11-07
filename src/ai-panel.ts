@@ -49,7 +49,7 @@ export function aiPanelMarkup(icon: (name: string) => string) {
         </details>
         <section id="ai-starters" class="ai-starters" aria-labelledby="ai-starters-title">
           <h3 id="ai-starters-title">엑셀에서 무엇을 할까요?</h3>
-          <p>“A1:C3에 신청자 명단을 만들어줘”처럼 요청하거나 문서를 골라 시작하세요.</p>
+          <p>“신청자 명단을 만들어줘”라고 입력하면 시트에 바로 작성합니다. 실행 취소로 되돌릴 수 있어요.</p>
           <div class="ai-template-buttons">
             <button type="button" data-template="notice"><strong>안내문</strong><span>일정, 공지, 알림</span></button>
             <button type="button" data-template="application"><strong>신청서</strong><span>교육, 행사, 이용 신청</span></button>
@@ -140,11 +140,13 @@ export function mountAiPanel(options: Options) {
     $("ai-range").textContent = "";
     $("ai-privacy").textContent = `보낸 글과 최근 대화가 ${provider}에 전달됩니다.`;
     const editor = options.editor();
-    if (selected || !link.checked || !editor) return;
+    if (!link.checked || !editor) return;
     try {
-      const range = resolveAIRange(editor, prompt.value);
+      const range = selected ? editor.range() : resolveAIRange(editor, prompt.value);
       $("ai-range").textContent = `작업 범위 ${range.getA1Notation()}`;
-      $("ai-privacy").textContent = `보낼 때 이 범위의 셀과 최근 대화가 ${provider}에 전달됩니다.`;
+      $("ai-privacy").textContent = selected
+        ? `입력한 내용과 최근 대화가 ${provider}에 전달되며, 초안은 선택한 첫 셀에 작성됩니다.`
+        : `보낼 때 이 범위의 셀과 최근 대화가 ${provider}에 전달됩니다.`;
       return { editor, range };
     } catch {
       $("ai-range").textContent = "표에 적용하려면 200셀 안에서 범위를 적어 주세요.";
@@ -257,7 +259,7 @@ export function mountAiPanel(options: Options) {
     const summary = document.createElement("p");
     summary.className = "ai-plan-summary";
     summary.setAttribute("role", "status");
-    summary.textContent = `${selection.label} · ${changes.length}개 셀 변경안`;
+    summary.textContent = `${selection.label}에 ${changes.length}개 셀을 적용했어요. 실행 취소로 되돌릴 수 있어요.`;
     const scroll = document.createElement("div");
     scroll.className = "ai-plan-scroll";
     scroll.tabIndex = 0;
@@ -278,28 +280,7 @@ export function mountAiPanel(options: Options) {
       row.insertCell().textContent = String(change.formula ?? change.after ?? "빈칸");
     }
     scroll.append(table);
-    const apply = document.createElement("button");
-    apply.type = "button";
-    apply.className = "primary";
-    apply.textContent = "엑셀에 적용";
-    apply.addEventListener("click", () => {
-      if (pending) return;
-      try {
-        const editor = options.editor();
-        if (!editor) throw new Error("시트를 준비한 뒤 다시 시도해 주세요.");
-        applyAIChanges(editor, selection, changes);
-        apply.disabled = true;
-        apply.textContent = "적용했어요";
-        summary.textContent = `${selection.label}에 ${changes.length}개 셀을 적용했어요.`;
-        options.changed();
-        dialog.close();
-        editor.select(selection.label);
-        options.toast("엑셀에 적용했어요. 실행 취소로 되돌릴 수 있어요.");
-      } catch (error) {
-        showError(error instanceof Error ? error.message : "변경안을 적용하지 못했어요.");
-      }
-    });
-    panel.append(summary, scroll, apply);
+    panel.append(summary, scroll);
     article.append(panel);
   }
 
@@ -321,12 +302,16 @@ export function mountAiPanel(options: Options) {
   }
 
   $("ai-open").addEventListener("click", async () => {
+    if (dialog.open) { prompt.focus(); return; }
     const id = ++opening;
     status = undefined;
     $("ai-owner").hidden = true;
     $("ai-status").textContent = "AI에 연결하고 있어요.";
     updateComposer();
-    dialog.showModal();
+    dialog.show();
+    document.documentElement.classList.add("ai-panel-open");
+    window.dispatchEvent(new Event("resize"));
+    if (!selected) prompt.focus();
     try {
       const response = await fetch("/api/status", {
         cache: "no-store",
@@ -347,6 +332,13 @@ export function mountAiPanel(options: Options) {
     pending?.abort();
     pending = undefined;
     updateComposer();
+    document.documentElement.classList.remove("ai-panel-open");
+    window.dispatchEvent(new Event("resize"));
+    $("ai-open").focus();
+  });
+  dialog.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key === "Escape") { event.preventDefault(); dialog.close(); }
   });
 
   for (const button of starters) {
@@ -398,6 +390,7 @@ export function mountAiPanel(options: Options) {
     try {
       text = readPrompt();
       const scope = updateScope();
+      if (link.checked && !scope) throw new Error("작업할 범위를 200셀 안에서 선택해 주세요.");
       if (scope) selection = captureAISelection(scope.editor, scope.range);
     } catch (error) {
       showError((error as Error).message);
@@ -408,7 +401,7 @@ export function mountAiPanel(options: Options) {
     pending = request;
     updateComposer();
     try {
-      const input = { mode: "chat", prompt: text, history: recentHistory(history), context: selection?.context };
+      const input = { mode: "chat", prompt: text, history: recentHistory(history), context: isTemplate ? undefined : selection?.context };
       const encoder = new TextEncoder();
       let body = JSON.stringify(input);
       while (input.history.length && encoder.encode(body).length > 65536) {
@@ -441,7 +434,16 @@ export function mountAiPanel(options: Options) {
         throw new Error(typeof data.error === "string" ? data.error : "답변을 받지 못했어요. 다시 보내 주세요.");
       if (typeof data.reply !== "string" || !data.reply.trim())
         throw new Error("답변이 비어 있어요. 다시 보내 주세요.");
-      const changes = selection ? reviewAIChanges(selection, data.edits) : [];
+      const edits = isTemplate && selection
+        ? [{ address: selection.cells.keys().next().value, kind: "set", value: data.reply }]
+        : data.edits;
+      const changes = selection ? reviewAIChanges(selection, edits) : [];
+      if (selection && changes.length) {
+        const editor = options.editor();
+        if (!editor) throw new Error("시트를 준비한 뒤 다시 요청해 주세요.");
+        applyAIChanges(editor, selection, changes);
+        options.changed();
+      }
 
       const user: Message = { role: "user", content: text };
       const answer: Message = { role: "assistant", content: data.reply };
@@ -465,6 +467,8 @@ export function mountAiPanel(options: Options) {
       if (request === pending) {
         pending = undefined;
         updateComposer();
+        if (dialog.open && (document.activeElement === send || document.activeElement === prompt || document.activeElement === document.body))
+          prompt.focus({ preventScroll: true });
       }
     }
   });

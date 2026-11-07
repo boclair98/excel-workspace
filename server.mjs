@@ -55,7 +55,7 @@ export function createServer(config = process.env) {
             ? rawUser
             : undefined;
         if (["GET", "HEAD"].includes(req.method) && url.pathname === "/healthz")
-          return json(res, 200, { status: "ok", version: "0.6.0" });
+          return json(res, 200, { status: "ok", version: "0.7.0" });
         if (req.method === "GET" && url.pathname === "/api/status") {
           const provider = aiProvider(config, user);
           return json(res, 200, {

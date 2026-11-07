@@ -31,7 +31,7 @@ test('AI provider request forwards trusted identity, limits context and parses r
   let body: Record<string, unknown> = {}; let headers: Record<string, string> = {};
   const request = async (url: string, init: RequestInit) => { assert.equal(url, 'https://example.invalid/llm/v1/messages'); assert.equal(init.redirect, 'error'); body = JSON.parse(init.body as string); headers = init.headers as Record<string, string>; return new Response(JSON.stringify({ content: [{ type: 'text', text: '{"explanation":"합계 수식입니다.","formula":"=SUM(B2:B10)"}' }] }), { headers: { 'content-type': 'application/json' } }); };
   const result = await askAI({ prompt: 'B2:B10 합계', context: '' }, 'test-user', { ANTHROPIC_API_KEY: 'unit-test-placeholder', ANTHROPIC_BASE_URL: 'https://example.invalid/llm' }, request);
-  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.6.0'); assert.equal(body.max_tokens, 1200);
+  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.7.0'); assert.equal(body.max_tokens, 1200);
 });
 const editContext = JSON.stringify({
   sheet: '품목', range: 'B2:C3',

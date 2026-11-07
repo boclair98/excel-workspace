@@ -71,6 +71,16 @@ export function createEditor(
     });
   });
   api.createWorkbook(book);
+  const shortcuts = api.getShortcut();
+  const syncInputFocus = () => {
+    const target = document.activeElement;
+    const external = target instanceof HTMLElement && !container.contains(target) &&
+      Boolean(target.closest('input,textarea,select,[contenteditable="true"],#ai-dialog'));
+    if (external) shortcuts.disableShortcut();
+    else shortcuts.enableShortcut();
+  };
+  document.addEventListener("focusin", syncInputFocus);
+  syncInputFocus();
   api.addEvent(api.Event.CommandExecuted, (event) => {
     if (event.type === 2) queueMicrotask(onSelection);
     if (
@@ -94,7 +104,11 @@ export function createEditor(
     current,
     range,
     snapshot: () => current().save(),
-    dispose: () => univer.dispose(),
+    dispose: () => {
+      document.removeEventListener("focusin", syncInputFocus);
+      shortcuts.enableShortcut();
+      univer.dispose();
+    },
     select(address: string) {
       if (
         !/^[A-Za-z]{1,2}[1-9]\d{0,3}(?::[A-Za-z]{1,2}[1-9]\d{0,3})?$/.test(
