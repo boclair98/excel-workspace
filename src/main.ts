@@ -30,7 +30,8 @@ import {
   Pencil,
   Layers,
 } from "lucide";
-import { newBook, validateBook, LIMITS, cellText } from "./model";
+import { newBook, validateBook, LIMITS } from "./model";
+import { aiPanelMarkup, mountAiPanel } from "./ai-panel";
 import {
   listBooks,
   saveBook,
@@ -102,7 +103,7 @@ $("app").innerHTML = `
 <input type="file" id="file" accept=".xlsx,.csv,.json" hidden>
 <dialog id="library-dialog" class="library-dialog" aria-label="내 통합문서"><button class="dialog-close icon-btn" data-close="library-dialog" aria-label="보관함 닫기">${icon("x")}</button><div id="library-host"></div></dialog>
 <dialog id="modal" aria-labelledby="modal-title"><form method="dialog"><div class="dialog-heading"><h2 id="modal-title"></h2><button class="icon-btn" value="cancel" aria-label="대화상자 닫기">${icon("x")}</button></div><div id="modal-body"></div><div class="dialog-actions"><button value="cancel">취소</button><button id="modal-ok" class="primary" value="ok">확인</button></div></form></dialog>
-<dialog id="ai-dialog" class="ai-dialog" aria-labelledby="ai-title"><div class="dialog-heading"><div><span class="eyebrow">SPREADSHEET ASSISTANT</span><h2 id="ai-title">${icon("sparkles")}AI 도우미</h2></div><button class="icon-btn" data-close="ai-dialog" aria-label="AI 도우미 닫기">${icon("x")}</button></div><div class="ai-content"><div class="ai-intro"><span class="ai-mark">${icon("sparkles")}</span><h3>수식이 막힐 땐,<br>말로 물어보세요.</h3><p>수식 만들기부터 표 해석까지.<br>제안을 확인하고 직접 적용할 수 있어요.</p></div><div id="ai-status" class="notice">AI 연결 상태를 확인하고 있어요.</div><div class="suggestions"><button data-prompt="B2부터 B10까지 합계를 구하는 수식을 만들어 줘">합계 수식 만들기 ${icon("plus")}</button><button data-prompt="선택 범위의 값을 바탕으로 주요 내용을 한국어로 요약해 줘. 데이터가 없으면 요청해 줘.">선택한 데이터 요약하기 ${icon("plus")}</button><button data-prompt="IF와 SUMIF 함수의 차이를 짧은 예시와 함께 설명해 줘">함수 사용법 알아보기 ${icon("plus")}</button></div><form id="ai-form"><label for="ai-prompt">무엇을 도와드릴까요?</label><textarea id="ai-prompt" maxlength="2000" rows="4" placeholder="예: B열이 ‘완료’인 행의 C열 금액을 합산해 줘" required></textarea><label class="checkbox"><input type="checkbox" id="include-cells">선택한 셀 내용도 전송 (최대 200셀)</label><p class="privacy">질문과 체크한 셀만 AI 제공자에게 전송됩니다. 개인정보는 제외해 주세요. Coders 로그인과 사용량 한도가 적용됩니다.</p><button id="ai-send" class="primary wide" type="submit">${icon("sparkles")}AI에게 질문하기</button></form><section id="ai-result" class="ai-result" aria-live="polite" hidden><span class="eyebrow">AI의 제안</span><p id="ai-explanation"></p><pre id="ai-formula" hidden></pre><button id="ai-apply" class="primary wide" hidden>선택 셀에 수식 적용</button><p class="privacy">AI 답변은 틀릴 수 있어요. 범위와 계산 결과를 확인해 주세요.</p></section></div></dialog>`;
+${aiPanelMarkup(icon)}`;
 icons();
 $("ai-open").before($("export"));
 
@@ -117,10 +118,6 @@ let editor: Editor,
 const knownVersions = new Map<string, number | null>();
 let conflictBookId: string | null = null;
 let sheetSignature = "";
-let aiTarget:
-    | { book: string; sheet: string; address: string; previous: string }
-    | undefined,
-  formula: string | null = null;
 const toast = (text: string, error = false) => {
   const host =
     document.activeElement?.closest("dialog[open]") ??
@@ -830,147 +827,15 @@ $("cell-input").addEventListener("keydown", (e) => {
 bind("help", async () => {
   await modal(
     "오픈소스 엑셀 사용 안내",
-    "<p>셀을 더블 클릭하거나 위의 입력줄로 값을 수정하세요. <b>=</b>로 시작하면 수식을 계산합니다. 셀 주소에 <b>A1:D10</b>을 입력하면 범위를 선택합니다.</p><p>Tab·Enter·방향키로 셀 이동, Ctrl+C/V로 복사·붙여넣기, Ctrl+Z로 실행 취소합니다. 시트 탭의 +로 시트를 추가하고, 우클릭 메뉴에서 행·열과 시트를 관리합니다.</p><p><b>보관</b>은 이 브라우저의 IndexedDB 저장입니다. 브라우저 데이터 삭제 시 사라질 수 있습니다. <b>XLSX 저장</b>이나 JSON 백업으로 별도 보관하세요. 다른 기기와 자동 동기화하거나 공동 편집하지 않습니다.</p><p>Univer(Apache-2.0)·ExcelJS(MIT) 기반의 독립 편집기입니다. Microsoft Excel 공식 제품이 아니며 차트·피벗·매크로·그림·고급 서식과 완전 호환을 보장하지 않습니다. 모바일은 간편 입력을 제공하며 복잡한 편집은 PC를 권장합니다.</p><p>AI는 개인 API 키 없이 Coders 관리형 Claude를 사용합니다. 질문과 선택 전송한 셀만 제공자에게 전달됩니다. 결과를 검토한 뒤 적용하세요.</p>",
+    "<p>셀을 더블 클릭하거나 위의 입력줄로 값을 수정하세요. <b>=</b>로 시작하면 수식을 계산합니다. 셀 주소에 <b>A1:D10</b>을 입력하면 범위를 선택합니다.</p><p>Tab·Enter·방향키로 셀 이동, Ctrl+C/V로 복사·붙여넣기, Ctrl+Z로 실행 취소합니다. 시트 탭의 +로 시트를 추가하고, 우클릭 메뉴에서 행·열과 시트를 관리합니다.</p><p><b>보관</b>은 이 브라우저의 IndexedDB 저장입니다. 브라우저 데이터 삭제 시 사라질 수 있습니다. <b>XLSX 저장</b>이나 JSON 백업으로 별도 보관하세요. 다른 기기와 자동 동기화하거나 공동 편집하지 않습니다.</p><p>Univer(Apache-2.0)·ExcelJS(MIT) 기반의 독립 편집기입니다. Microsoft Excel 공식 제품이 아니며 차트·피벗·매크로·그림·고급 서식과 완전 호환을 보장하지 않습니다. 모바일은 간편 입력을 제공하며 복잡한 편집은 PC를 권장합니다.</p><p>AI 도우미의 <b>질문</b>은 수식과 요약을 제안합니다. <b>표 바꾸기</b>는 선택한 범위의 값을 편집합니다. 선택한 셀은 동의할 때만 제공자에게 전송되며, 변경 전후를 확인하고 적용할 수 있습니다.</p>",
     "확인",
   );
 });
-let aiStatus:
-  | { aiAvailable: boolean; signedIn: boolean; managed: boolean }
-  | undefined;
-bind("ai-open", async () => {
-  ($("ai-dialog") as HTMLDialogElement).showModal();
-  try {
-    const res = await fetch("/api/status");
-    if (!res.ok) throw new Error();
-    aiStatus = await res.json();
-    $("ai-status").innerHTML = aiStatus?.aiAvailable
-      ? aiStatus.managed && !aiStatus.signedIn
-        ? `AI 사용에는 Coders 로그인이 필요합니다. <a href="https://mcp.coders.kr/sso/login?return_to=${encodeURIComponent(location.origin)}">로그인하기 →</a>`
-        : "AI 연결 설정됨 · 질문과 동의한 셀만 전송"
-      : "AI 연결 전입니다. 배포 환경에서 연결되면 사용할 수 있어요. 엑셀 기능은 지금도 사용 가능합니다.";
-  } catch {
-    $("ai-status").textContent =
-      "AI 서버 상태를 확인하지 못했습니다. 잠시 후 다시 열어 주세요.";
-  }
-});
-document.querySelectorAll<HTMLElement>("[data-prompt]").forEach(
-  (b) =>
-    (b.onclick = () => {
-      ($("ai-prompt") as HTMLTextAreaElement).value = b.dataset.prompt!;
-      $("ai-prompt").focus();
-    }),
-);
-$("ai-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  run(async () => {
-    if (!aiStatus?.aiAvailable)
-      throw new Error(
-        "AI가 아직 연결되지 않았습니다. 편집 기능은 계속 사용할 수 있습니다.",
-      );
-    if (aiStatus.managed && !aiStatus.signedIn)
-      throw new Error("위의 로그인하기를 누른 뒤 다시 질문해 주세요.");
-    const r = editor.range(),
-      bounds = r.getRange(),
-      sheet = editor.current().getActiveSheet(),
-      cell = sheet.getRange(bounds.startRow, bounds.startColumn);
-    const target = {
-      book: editor.current().getId(),
-      sheet: sheet.getSheetId(),
-      address: cell.getA1Notation(),
-      previous: JSON.stringify(cell.getCellData()),
-    };
-    let context = "";
-    if (($("include-cells") as HTMLInputElement).checked) {
-      if (
-        (bounds.endRow - bounds.startRow + 1) *
-          (bounds.endColumn - bounds.startColumn + 1) >
-        200
-      )
-        throw new Error("선택 범위를 200셀 이내로 줄여 주세요.");
-      const selectedData =
-        editor.snapshot().sheets[sheet.getSheetId()].cellData ?? {};
-      context = JSON.stringify({
-        sheet: sheet.getSheetName(),
-        range: r.getA1Notation(),
-        values: Array.from(
-          { length: bounds.endRow - bounds.startRow + 1 },
-          (_, row) =>
-            Array.from(
-              { length: bounds.endColumn - bounds.startColumn + 1 },
-              (_, column) =>
-                cellText(
-                  selectedData[bounds.startRow + row]?.[
-                    bounds.startColumn + column
-                  ],
-                ),
-            ),
-        ),
-        formulas: r.getFormulas(),
-      });
-      if (context.length > 16000)
-        throw new Error("선택한 내용이 너무 깁니다. 범위를 줄여 주세요.");
-    }
-    ($("ai-send") as HTMLButtonElement).disabled = true;
-    $("ai-send").textContent = "AI가 생각하고 있어요…";
-    $("ai-result").hidden = true;
-    formula = null;
-    try {
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: ($("ai-prompt") as HTMLTextAreaElement).value,
-          context,
-        }),
-        signal: AbortSignal.timeout(45000),
-      });
-      if (!res.headers.get("content-type")?.includes("application/json"))
-        throw new Error(
-          "로그인 또는 사용량 상태를 확인한 뒤 다시 시도해 주세요.",
-        );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "AI 요청에 실패했습니다.");
-      formula = data.formula;
-      aiTarget = target;
-      $("ai-explanation").textContent = data.explanation;
-      $("ai-formula").textContent = formula;
-      $("ai-formula").hidden = !formula;
-      $("ai-apply").hidden = !formula;
-      $("ai-apply").textContent = `${target.address}에 수식 적용`;
-      $("ai-result").hidden = false;
-      $("ai-result").scrollIntoView({ behavior: "smooth", block: "nearest" });
-    } finally {
-      ($("ai-send") as HTMLButtonElement).disabled = false;
-      $("ai-send").textContent = "AI에게 질문하기";
-    }
-  })();
-});
-bind("ai-apply", async () => {
-  if (!formula || !aiTarget) return;
-  if (
-    editor.current().getId() !== aiTarget.book ||
-    editor.current().getActiveSheet().getSheetId() !== aiTarget.sheet
-  )
-    throw new Error("질문할 때의 문서와 시트로 돌아간 뒤 적용해 주세요.");
-  const cell = editor.current().getActiveSheet().getRange(aiTarget.address);
-  if (JSON.stringify(cell.getCellData()) !== aiTarget.previous)
-    throw new Error("질문 이후 셀 내용이 변경되었습니다. 다시 질문해 주세요.");
-  if (
-    cell.getValue() != null &&
-    cell.getValue() !== "" &&
-    !(await modal(
-      "기존 셀 덮어쓰기",
-      `<p>${esc(aiTarget.address)}의 내용을 AI 수식으로 바꿀까요? 실행 취소로 되돌릴 수 있습니다.</p>`,
-      "적용",
-    ))
-  )
-    return;
-  cell.setValue(formula);
-  onChange();
-  $("ai-apply").hidden = true;
-  toast(
-    `${aiTarget.address}에 수식을 적용했습니다. 계산 결과를 확인해 주세요.`,
-  );
+mountAiPanel({
+  editor: () => editor,
+  changed: updateAfterEdit,
+  toast,
+  modal,
 });
 window.addEventListener("beforeunload", (e) => {
   if (dirty) {

@@ -125,6 +125,145 @@ test('XLSX upload and multi-sheet content, CSV and JSON backup roundtrip', async
   expect(errors).toEqual([]);
 });
 
+test('AI edit reviews typed cell changes, applies them to XLSX and undoes them together', async ({ page }, info) => {
+  const source = new ExcelJS.Workbook();
+  const sheet = source.addWorksheet('AI 검증');
+  sheet.getCell('A2').value = '범위 밖';
+  sheet.getCell('B2').value = '  상품  ';
+  sheet.getCell('B2').font = { bold: true };
+  sheet.getCell('C2').value = '지울 값';
+  sheet.getCell('D2').value = '코드';
+  sheet.getCell('C3').value = true;
+  sheet.getCell('D3').value = { formula: 'B3+2', result: 2 };
+  const file = info.outputPath('ai-source.xlsx');
+  await source.xlsx.writeFile(file);
+  const requests: { mode: string; context: string }[] = [];
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'openai', managed: true, signedIn: true, openAIUserRef: '1'.repeat(32) } }));
+  await page.route('**/api/ai', route => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ json: { explanation: '상품명과 코드, 빈칸을 정리합니다.', edits: [
+      { address: 'B2', kind: 'set', value: '상품' },
+      { address: 'C2', kind: 'clear', value: null },
+      { address: 'D2', kind: 'set', value: '00123' },
+      { address: 'B3', kind: 'set', value: 0 },
+      { address: 'C3', kind: 'set', value: false },
+    ] } });
+  });
+  await page.goto('/');
+  await ready(page);
+  await importFile(page, file);
+  await selectCell(page, 'B2:D3');
+  await page.locator('#ai-open').click();
+  await expect(page.locator('#ai-status')).toHaveText('OpenAI 연결 설정됨');
+  await page.getByRole('radio', { name: '표 바꾸기' }).check();
+  await expect(page.locator('#ai-range-label')).toHaveText('선택 범위 B2:D3');
+  await page.locator('#ai-prompt').fill('상품명과 코드를 정리하고 빈칸을 0으로 채워 줘');
+  await page.locator('#ai-send').click();
+  await expect(page.locator('#ai-error')).toContainText('전송에 동의');
+  expect(requests).toHaveLength(0);
+  await page.locator('#include-cells').check();
+  await page.locator('#ai-send').click();
+  await expect(page.locator('#ai-result-label')).toHaveText('B2:D3 · 5개 셀 변경안');
+  await expect(page.locator('#ai-change-rows tr')).toHaveCount(5);
+  await expect(page.locator('#ai-change-rows tr').first()).toContainText('“  상품  ”');
+  await expect(page.locator('#ai-change-rows tr').last()).toContainText('FALSE');
+  await expect(page.locator('#cell-input')).toHaveValue('  상품  ');
+  expect(requests).toHaveLength(1);
+  expect(requests[0].mode).toBe('edit');
+  const sent = JSON.parse(requests[0].context);
+  expect(sent.range).toBe('B2:D3');
+  expect(sent.values).toEqual([['  상품  ', '지울 값', '코드'], [null, true, 2]]);
+  expect(sent.formulas[1][2]).toBe('=B3+2');
+  expect(requests[0].context).not.toContain('범위 밖');
+  await page.locator('#ai-apply').click();
+  await expect(page.locator('#ai-result-label')).toHaveText('5개 셀에 적용했습니다');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ai-open')).toBeFocused();
+  const applied = (await downloadedBook(page, info, 'ai-applied.xlsx')).worksheets[0];
+  expect(applied.getCell('A2').value).toBe('범위 밖');
+  expect(applied.getCell('B2').value).toBe('상품');
+  expect(applied.getCell('B2').font.bold).toBe(true);
+  expect(applied.getCell('C2').value).toBeNull();
+  expect(applied.getCell('D2').value).toBe('00123');
+  expect(applied.getCell('B3').value).toBe(0);
+  expect(applied.getCell('C3').value).toBe(false);
+  expect(applied.getCell('D3').formula).toBe('B3+2');
+  await page.locator('#undo').click();
+  const undone = (await downloadedBook(page, info, 'ai-undone.xlsx')).worksheets[0];
+  expect(undone.getCell('B2').value).toBe('  상품  ');
+  expect(undone.getCell('C2').value).toBe('지울 값');
+  expect(undone.getCell('D2').value).toBe('코드');
+  expect(undone.getCell('B3').value).toBeNull();
+  expect(undone.getCell('C3').value).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('AI rejects out-of-range changes and fits the reviewed changes at four sizes', async ({ page }, info) => {
+  let expired = true;
+  let invalid = true;
+  let redirects = 0;
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'claude', managed: true, signedIn: true, openAIUserRef: '2'.repeat(32) } }));
+  await page.route('https://example.invalid/expired-login', route => {
+    redirects++;
+    return route.fulfill({ status: 200, body: 'Login' });
+  });
+  await page.route('**/api/ai', route => expired
+    ? route.fulfill({ status: 307, headers: { Location: 'https://example.invalid/expired-login' } })
+    : route.fulfill({ json: {
+    explanation: '선택한 범위의 빈칸에 새 값을 입력합니다.',
+    edits: [
+      { address: 'A1', kind: 'set', value: 0 },
+      { address: invalid ? 'D1' : 'B1', kind: 'set', value: '공급처 연락처 확인 후 재고 담당자에게 검토 요청' },
+      { address: 'C1', kind: 'set', value: '=1+1' },
+    ],
+  } }));
+  await page.goto('/');
+  await ready(page);
+  await selectCell(page, 'A1:C1');
+  await page.locator('#ai-open').click();
+  await expect(page.locator('#ai-status')).toContainText('관리형 AI');
+  await page.getByRole('radio', { name: '표 바꾸기' }).check();
+  await page.locator('#ai-prompt').fill('빈칸을 채워 줘');
+  await page.locator('#include-cells').check();
+  await page.locator('#ai-send').click();
+  await expect(page.locator('#ai-error')).toContainText('로그인 상태');
+  expect(redirects).toBe(0);
+  expired = false;
+  await page.locator('#ai-send').click();
+  await expect(page.locator('#ai-error')).toContainText('범위 밖');
+  await expect(page.locator('#ai-apply')).toBeHidden();
+  await expect(page.locator('#cell-input')).toHaveValue('');
+  invalid = false;
+  await page.locator('#ai-send').click();
+  await expect(page.locator('#ai-result-label')).toHaveText('A1:C1 · 3개 셀 변경안');
+  await expect(page.locator('#ai-error')).toBeHidden();
+  for (const viewport of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await page.locator('#ai-apply').scrollIntoViewIfNeeded();
+    await expect(page.locator('#ai-apply')).toBeInViewport();
+    expect(await page.locator('#ai-apply').evaluate(button => button.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => {
+      const panel = document.querySelector('.ai-content')!;
+      const preview = document.getElementById('ai-changes')!;
+      return document.documentElement.scrollWidth <= innerWidth && panel.scrollWidth <= panel.clientWidth && preview.scrollWidth <= preview.clientWidth;
+    })).toBe(true);
+    await page.screenshot({ path: info.outputPath(`ai-preview-${viewport.width}.png`) });
+  }
+  await page.locator('#ai-apply').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#ai-result-label')).toHaveText('3개 셀에 적용했습니다');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ai-open')).toBeFocused();
+  const applied = (await downloadedBook(page, info, 'ai-literal.xlsx')).worksheets[0];
+  expect(applied.getCell('C1').value).toBe('=1+1');
+  expect(applied.getCell('C1').formula).toBeUndefined();
+  expect(errors).toEqual([]);
+});
+
 test('responsive editor and dialogs at 360, 390, 768 and 1440 pixels', async ({ page }, info) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto('/'); await ready(page); await page.locator('#example').click();
@@ -165,7 +304,7 @@ test('keyboard ribbon and personalization, honest disconnected AI without data t
   await page.locator('#ai-open').click(); await expect(page.locator('#ai-status')).toContainText('AI 연결 전');
   await expect(page.locator('#include-cells')).not.toBeChecked();
   await page.locator('#ai-prompt').fill('B2:B10 합계 수식을 만들어 줘'); await page.locator('#ai-send').click();
-  await expect(page.locator('#toast')).toContainText('AI가 아직 연결되지 않았습니다');
+  await expect(page.locator('#ai-error')).toContainText('AI가 아직 연결되지 않았습니다');
   await expect(page.locator('#ai-result')).toBeHidden(); expect(aiRequests).toBe(0);
   await page.screenshot({ path: info.outputPath('disconnected-ai.png') });
 });

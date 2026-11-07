@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 // @ts-expect-error Node server is intentionally dependency-free JavaScript.
 import { createServer } from '../server.mjs';
 // @ts-expect-error Shared server contract is JavaScript.
-import { askAI, parseSuggestion, safeFormula, validateRequest } from '../ai.mjs';
+import { aiProvider, askAI, openAIUserRef, parseEditPlan, parseSuggestion, safeFormula, validateRequest } from '../ai.mjs';
 test('AI validates inputs, gives honest missing-config status and strips unsafe formula', async () => {
   await assert.rejects(askAI({ prompt: '' }, undefined, {}));
   const result = await askAI({ prompt: '합계 알려줘' }, undefined, {}); assert.equal(result.status, 503);
@@ -31,7 +31,91 @@ test('AI provider request forwards trusted identity, limits context and parses r
   let body: Record<string, unknown> = {}; let headers: Record<string, string> = {};
   const request = async (url: string, init: RequestInit) => { assert.equal(url, 'https://example.invalid/llm/v1/messages'); assert.equal(init.redirect, 'error'); body = JSON.parse(init.body as string); headers = init.headers as Record<string, string>; return new Response(JSON.stringify({ content: [{ type: 'text', text: '{"explanation":"합계 수식입니다.","formula":"=SUM(B2:B10)"}' }] }), { headers: { 'content-type': 'application/json' } }); };
   const result = await askAI({ prompt: 'B2:B10 합계', context: '' }, 'test-user', { ANTHROPIC_API_KEY: 'unit-test-placeholder', ANTHROPIC_BASE_URL: 'https://example.invalid/llm' }, request);
-  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.3.1'); assert.equal(body.max_tokens, 1200);
+  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.4.0'); assert.equal(body.max_tokens, 1200);
+});
+const editContext = JSON.stringify({
+  sheet: '품목', range: 'B2:C3',
+  values: [[null, '  사과  '], [5, '삭제']],
+  formulas: [['', ''], ['=SUM(A1:A2)', '']],
+});
+const editInput = { mode: 'edit', prompt: '빈칸을 0으로 채워 줘', context: editContext };
+const acceptedEdit = { address: 'B2', kind: 'set', value: 0 };
+const openAIConfig = { OPENAI_API_KEY: 'unit-test-placeholder' };
+const editAnswer = { explanation: 'B2를 채웠습니다.', edits: [acceptedEdit] };
+
+test('OpenAI Responses requests strict typed edits with consent and no Coders identity', async () => {
+  const config = {
+    ...openAIConfig,
+    CODERS_NATIVE: 'true',
+    OPENAI_CODERS_USER_REF: openAIUserRef('authorized-viewer'),
+  };
+  const result = await askAI(editInput, 'authorized-viewer', config, async (url: string, init: RequestInit) => {
+    assert.equal(url, 'https://api.openai.com/v1/responses');
+    assert.equal(init.redirect, 'error');
+    assert.equal(new Headers(init.headers).get('Authorization'), 'Bearer unit-test-placeholder');
+    assert.equal(new Headers(init.headers).has('X-Coders-User'), false);
+    const body = JSON.parse(init.body as string);
+    assert.equal(body.model, 'gpt-5.4-mini');
+    assert.equal(body.store, false);
+    assert.equal(body.text.format.strict, true);
+    assert.equal(body.text.format.name, 'spreadsheet_edits');
+    assert.deepEqual(JSON.parse(body.input), { request: editInput.prompt, selection: JSON.parse(editContext) });
+    return Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(editAnswer) }] }] });
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ...editAnswer, provider: 'openai' });
+});
+
+test('managed Claude also returns an edit plan', async () => {
+  const config = { ANTHROPIC_API_KEY: 'unit-test-placeholder', ANTHROPIC_BASE_URL: 'https://example.invalid/llm' };
+  const result = await askAI(editInput, 'test-user', config, async (_url: string, init: RequestInit) => {
+    assert.equal(new Headers(init.headers).get('X-Coders-User'), 'test-user');
+    const body = JSON.parse(init.body as string);
+    assert.deepEqual(JSON.parse(body.messages[0].content).selection, JSON.parse(editContext));
+    return Response.json({ stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(editAnswer) }] });
+  });
+  assert.deepEqual(result, { status: 200, body: { ...editAnswer, provider: 'claude' } });
+});
+
+test('native mode enables the personal key only for the configured Coders account', () => {
+  const user = 'authorized-viewer';
+  const config = {
+    ...openAIConfig,
+    CODERS_NATIVE: 'true',
+    HOST: '0.0.0.0',
+    OPENAI_CODERS_USER_REF: openAIUserRef(user),
+    ANTHROPIC_API_KEY: 'unit-test-placeholder',
+    ANTHROPIC_BASE_URL: 'https://example.invalid',
+  };
+  assert.match(config.OPENAI_CODERS_USER_REF, /^[a-f0-9]{32}$/);
+  assert.equal(aiProvider(config, user), 'openai');
+  assert.equal(aiProvider(config, 'other-viewer'), 'claude');
+  assert.equal(aiProvider(config), 'claude');
+  assert.equal(aiProvider({ ...config, OPENAI_CODERS_USER_REF: undefined }, user), 'claude');
+  assert.equal(aiProvider({ ...openAIConfig, HOST: '0.0.0.0' }), null);
+  assert.equal(aiProvider({ ...openAIConfig, HOST: '127.0.0.1' }), 'openai');
+});
+
+test('edit plan rejects missing consent, invalid ranges and entire invalid responses', () => {
+  assert.throws(() => validateRequest({ ...editInput, context: '' }), /동의/);
+  assert.throws(() => validateRequest({ ...editInput, context: editContext.replace('B2:C3', 'C3:B2') }), /주소/);
+  for (const edit of [
+    { ...acceptedEdit, address: 'A2' },
+    { ...acceptedEdit, address: 'b2' },
+    { ...acceptedEdit, address: 'B3' },
+    { address: 'C2', kind: 'clear', value: 1 },
+    { address: 'C2', kind: 'set', value: { formula: '=1' } },
+  ]) {
+    assert.throws(() => parseEditPlan(JSON.stringify({ ...editAnswer, edits: [acceptedEdit, edit] }), editContext));
+  }
+  assert.deepEqual(parseEditPlan(JSON.stringify({ ...editAnswer, edits: [] }), editContext).edits, []);
+});
+
+test('incomplete OpenAI responses do not expose a partial edit plan', async () => {
+  const result = await askAI(editInput, undefined, openAIConfig, async () =>
+    Response.json({ status: 'incomplete', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(editAnswer) }] }] }));
+  assert.equal(result.status, 502);
+  assert.equal(result.body.edits, undefined);
 });
 test('AI timeout, provider failures and invalid response shape return useful safe errors', async () => {
   const config = { ANTHROPIC_API_KEY: 'unit-test-placeholder', ANTHROPIC_BASE_URL: 'https://example.invalid' };

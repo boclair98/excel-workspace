@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import Papa from "papaparse";
+import { CellValueType } from "@univerjs/core";
 import type {
   IWorkbookData,
   ICellData,
@@ -317,13 +318,18 @@ export async function exportXlsx(book: IWorkbookData): Promise<ArrayBuffer> {
       )) {
         if (!data) continue;
         const cell = ws.getCell(+r + 1, +c + 1);
-        const value = cellText(data);
+        const value =
+          data.t === CellValueType.BOOLEAN && data.v != null
+            ? Boolean(data.v)
+            : cellText(data);
         cell.value = data.f
           ? {
               formula: data.f.replace(/^=/, ""),
               ...(data.v != null ? { result: value } : {}),
             }
-          : value;
+          : data.v == null && !data.p
+            ? null
+            : value;
         const s =
           (typeof data.s === "string" ? book.styles[data.s] : data.s) ?? {};
         cell.font = {

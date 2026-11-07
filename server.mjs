@@ -2,7 +2,7 @@ import http from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { askAI, validateRequest } from "./ai.mjs";
+import { aiProvider, askAI, openAIUserRef, validateRequest } from "./ai.mjs";
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript",
@@ -41,15 +41,17 @@ export function createServer(config = process.env) {
             ? rawUser
             : undefined;
         if (["GET", "HEAD"].includes(req.method) && url.pathname === "/healthz")
-          return json(res, 200, { status: "ok", version: "0.3.1" });
-        if (req.method === "GET" && url.pathname === "/api/status")
+          return json(res, 200, { status: "ok", version: "0.4.0" });
+        if (req.method === "GET" && url.pathname === "/api/status") {
+          const provider = aiProvider(config, user);
           return json(res, 200, {
-            aiAvailable: Boolean(
-              config.ANTHROPIC_API_KEY && config.ANTHROPIC_BASE_URL,
-            ),
+            aiAvailable: Boolean(provider),
+            provider,
             signedIn: Boolean(user),
             managed,
+            openAIUserRef: openAIUserRef(user),
           });
+        }
         if (url.pathname === "/api/ai" && req.method === "POST") {
           const origins = managed
             ? [`https://${req.headers.host}`]

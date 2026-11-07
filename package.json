@@ -1,6 +1,6 @@
 {
   "name": "excel-workspace",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -8,7 +8,7 @@
     "dev": "vite --host 127.0.0.1 --port 7730",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "start": "node server.mjs",
+    "start": "node --env-file-if-exists=.env.local server.mjs",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
