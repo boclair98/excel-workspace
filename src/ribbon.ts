@@ -44,8 +44,8 @@ const displayFields = [
   { id: "layout", label: "PC 작업 영역", hint: "시트를 열었을 때의 배치", choices: [
     ["wide", "전체 폭 시트"], ["library", "보관함과 시트"],
   ] },
-  { id: "ai-width", label: "AI 작업 창", hint: "넓은 PC에서 요청과 결과를 보는 방식", choices: [
-    ["wide", "넓게 · 나란히 보기"], ["compact", "간결하게 · 위아래로 보기"],
+  { id: "ai-width", label: "AI 채팅 창", hint: "PC에서 채팅 창의 너비를 정합니다", choices: [
+    ["wide", "넓게"], ["compact", "기본"],
   ] },
 ] as const;
 

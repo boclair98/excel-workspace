@@ -1,56 +1,88 @@
-import {
-  applyAIChanges,
-  captureAISelection,
-  reviewAIChanges,
-  type AISelection,
-} from "./ai-edit";
+import { applyAIChanges, captureAISelection, resolveAIRange, reviewAIChanges, type AISelection } from "./ai-edit";
 import type { Editor } from "./editor";
+
+type TemplateKey = "notice" | "application";
+type Field = {
+  name: string;
+  label: string;
+  example: string;
+  limit: number;
+  optional?: boolean;
+  multiline?: boolean;
+};
+
+const templates: Record<TemplateKey, { title: string; fields: Field[] }> = {
+  notice: {
+    title: "안내문",
+    fields: [
+      { name: "topic", label: "안내 제목", example: "경로당 식사 시간 변경", limit: 100 },
+      { name: "audience", label: "안내 대상", example: "경로당 이용자", limit: 120, optional: true },
+      { name: "details", label: "안내할 내용", example: "3월 15일부터 오전 11시에 식사를 제공합니다.", limit: 1200, multiline: true },
+    ],
+  },
+  application: {
+    title: "신청서",
+    fields: [
+      { name: "topic", label: "신청 항목", example: "주민센터 스마트폰 교육", limit: 100 },
+      { name: "reason", label: "신청 사유", example: "가족과 사진을 주고받는 방법을 배우고 싶습니다.", limit: 1200, multiline: true },
+      { name: "applicant", label: "이름", example: "신청하는 사람의 이름", limit: 80, optional: true },
+      { name: "recipient", label: "제출처", example: "○○동 주민센터", limit: 120, optional: true },
+    ],
+  },
+};
 
 export function aiPanelMarkup(icon: (name: string) => string) {
   return `<dialog id="ai-dialog" class="ai-dialog" aria-labelledby="ai-title">
-    <div class="dialog-heading">
-      <span class="ai-mark">${icon("sparkles")}</span>
-      <div class="ai-heading-copy"><h2 id="ai-title">AI 도우미</h2><p>수식을 물어보거나 선택한 표를 바꾸세요.</p></div>
-      <button class="icon-btn" data-close="ai-dialog" aria-label="AI 도우미 닫기">${icon("x")}</button>
-    </div>
-    <div class="ai-content">
+    <header class="dialog-heading">
+      <span class="ai-mark" aria-hidden="true">${icon("sparkles")}</span>
+      <h2 id="ai-title">AI 채팅</h2>
+      <button type="button" id="ai-new-chat" hidden>새 대화</button>
+      <button type="button" class="icon-btn" data-close="ai-dialog" aria-label="AI 채팅 닫기">${icon("x")}</button>
+    </header>
+    <form id="ai-form" novalidate>
+      <div id="ai-thread" class="ai-thread" tabindex="0" aria-label="문서 작성과 대화">
+        <div id="ai-status" class="notice" role="status">AI에 연결하고 있어요.</div>
+        <details class="ai-owner" id="ai-owner" hidden>
+          <summary>개인 OpenAI 연결 코드</summary>
+          <code id="ai-owner-code"></code>
+          <button type="button" id="ai-copy-code">코드 복사</button>
+        </details>
+        <section id="ai-starters" class="ai-starters" aria-labelledby="ai-starters-title">
+          <h3 id="ai-starters-title">엑셀에서 무엇을 할까요?</h3>
+          <p>“A1:C3에 신청자 명단을 만들어줘”처럼 요청하거나 문서를 골라 시작하세요.</p>
+          <div class="ai-template-buttons">
+            <button type="button" data-template="notice"><strong>안내문</strong><span>일정, 공지, 알림</span></button>
+            <button type="button" data-template="application"><strong>신청서</strong><span>교육, 행사, 이용 신청</span></button>
+          </div>
+        </section>
+        <div id="ai-messages" class="ai-messages" role="log" aria-label="AI 대화"></div>
+        <fieldset id="ai-template" class="ai-template" aria-describedby="ai-template-hint" hidden>
+          <legend id="ai-template-title"></legend>
+          <p id="ai-template-hint">필수 항목만 적어도 초안을 받을 수 있어요.</p>
+          <div id="ai-template-fields" class="ai-template-fields"></div>
+          <button type="button" id="ai-cancel-template">대화로 돌아가기</button>
+        </fieldset>
+      </div>
       <div class="ai-composer">
-      <div id="ai-status" class="notice" role="status">AI 연결 상태를 확인하고 있어요.</div>
-      <details class="ai-owner" id="ai-owner" hidden><summary>개인 OpenAI 연결 코드</summary><p>내 Coders 계정에 개인 키를 연결할 때 쓰는 코드예요.</p><code id="ai-owner-code"></code><button id="ai-copy-code" type="button">코드 복사</button></details>
-      <form id="ai-form">
-        <fieldset class="ai-modes"><legend class="sr-only">AI 작업 선택</legend><label><input type="radio" name="ai-mode" value="question" checked>질문</label><label><input type="radio" name="ai-mode" value="edit">표 바꾸기</label></fieldset>
-        <div class="suggestions"><button type="button" data-ai-mode="question" data-prompt="선택한 데이터의 합계를 구하는 수식을 만들어 줘">합계 수식 ${icon("plus")}</button><button type="button" data-ai-mode="question" data-prompt="선택 범위를 한국어로 요약해 줘">데이터 요약 ${icon("plus")}</button><button type="button" data-ai-mode="edit" data-prompt="빈칸을 0으로 채워 줘" hidden>빈칸 채우기 ${icon("plus")}</button><button type="button" data-ai-mode="edit" data-prompt="문자의 앞뒤 공백을 정리해 줘" hidden>공백 정리 ${icon("plus")}</button></div>
-        <div id="ai-edit-scope" class="ai-edit-scope" hidden><strong id="ai-range-label"></strong><span>이 범위의 일반 값만 바꿔요.</span></div>
-        <label for="ai-prompt">무엇을 도와드릴까요?</label><textarea id="ai-prompt" maxlength="2000" rows="3" required></textarea>
-        <label class="checkbox"><input type="checkbox" id="include-cells">선택한 셀 내용도 전송 (최대 200셀)</label>
-        <p class="privacy" id="ai-privacy">질문과 동의한 셀만 AI 제공자에게 전송됩니다.</p>
-        <button id="ai-send" class="primary wide" type="submit">AI에게 질문하기</button>
-      </form>
-      <p id="ai-error" class="ai-error" role="alert" hidden></p>
-      </div>
-      <div class="ai-output">
-      <div class="ai-empty">${icon("table-2")}<h3>결과 미리보기</h3><p>AI 답변과 셀별 변경 전후를 여기서 확인할 수 있어요.</p></div>
-      <section id="ai-result" class="ai-result" aria-labelledby="ai-result-label" hidden>
-        <h3 id="ai-result-label" aria-live="polite" tabindex="-1">AI의 제안</h3>
-        <p id="ai-explanation"></p>
-        <pre id="ai-formula" hidden></pre>
-        <div id="ai-changes" class="ai-changes" role="region" aria-label="셀 변경 전후" tabindex="0" hidden>
-          <table><thead><tr><th scope="col">셀</th><th scope="col">기존 값</th><th scope="col">새 값</th></tr></thead><tbody id="ai-change-rows"></tbody></table>
+        <span id="ai-progress" class="sr-only" role="status"></span>
+        <p id="ai-error" class="ai-error" role="alert" hidden></p>
+        <div id="ai-scope" class="ai-scope">
+          <label><input id="ai-link-sheet" type="checkbox" aria-describedby="ai-range ai-privacy" checked>셀 연결</label>
+          <span id="ai-range"></span>
         </div>
-        <button id="ai-apply" class="primary wide" hidden>선택 셀에 수식 적용</button>
-        <p class="privacy" id="ai-result-note">범위와 계산 결과를 확인해 주세요.</p>
-      </section>
+        <div class="ai-composer-row">
+          <div id="ai-message-entry" class="ai-message-entry">
+            <label class="sr-only" for="ai-prompt">메시지</label>
+            <textarea id="ai-prompt" rows="2" maxlength="2000" aria-describedby="ai-privacy" placeholder="메시지를 적어 주세요."></textarea>
+          </div>
+          <button id="ai-send" class="primary" type="submit" disabled>보내기</button>
+        </div>
+        <p id="ai-privacy" class="ai-privacy">보낸 글과 최근 대화가 AI에 전달됩니다.</p>
       </div>
-    </div>
+    </form>
   </dialog>`;
 }
 
-type Options = {
-  editor: () => Editor;
-  changed: () => void;
-  toast: (text: string) => void;
-  modal: (title: string, body: string, ok?: string) => Promise<boolean>;
-};
 type Status = {
   aiAvailable: boolean;
   managed: boolean;
@@ -59,26 +91,19 @@ type Status = {
   sharedOpenAI?: boolean;
   openAIUserRef?: string | null;
 };
-type Preview =
-  | {
-      mode: "edit";
-      selection: AISelection;
-      changes: ReturnType<typeof reviewAIChanges>;
-    }
-  | {
-      mode: "question";
-      bookId: string;
-      sheetId: string;
-      address: string;
-      previous: string;
-      formula: string;
-    };
+type Message = { role: "user" | "assistant"; content: string };
+type Options = { editor: () => Editor | undefined; changed: () => void; toast: (text: string) => void };
 
-function displayValue(value: string | number | boolean | null) {
-  if (value == null) return "빈칸";
-  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
-  if (typeof value === "string") return `“${value}”`;
-  return String(value);
+function recentHistory(history: Message[]) {
+  let start = history.length;
+  let length = 0;
+  while (start >= 2 && history.length - start < 8) {
+    const pairLength = history[start - 2].content.length + history[start - 1].content.length;
+    if (length + pairLength > 10000) break;
+    length += pairLength;
+    start -= 2;
+  }
+  return history.slice(start);
 }
 
 export function mountAiPanel(options: Options) {
@@ -86,99 +111,221 @@ export function mountAiPanel(options: Options) {
     document.getElementById(id) as T;
   const dialog = $<HTMLDialogElement>("ai-dialog");
   const form = $<HTMLFormElement>("ai-form");
+  const thread = $("ai-thread");
   const prompt = $<HTMLTextAreaElement>("ai-prompt");
-  const include = $<HTMLInputElement>("include-cells");
   const send = $<HTMLButtonElement>("ai-send");
-  const apply = $<HTMLButtonElement>("ai-apply");
+  const link = $<HTMLInputElement>("ai-link-sheet");
+  const reset = $<HTMLButtonElement>("ai-new-chat");
+  const cancel = $<HTMLButtonElement>("ai-cancel-template");
+  const fields = $("ai-template-fields");
+  const messages = $("ai-messages");
   const feedback = $("ai-error");
-  const changesTable = $("ai-changes");
-  const changeRows = $("ai-change-rows");
+  const starters = Array.from(form.querySelectorAll<HTMLButtonElement>("[data-template]"));
+  const history: Message[] = [];
+  let selected: TemplateKey | null = null;
   let status: Status | undefined;
-  let preview: Preview | undefined;
   let pending: AbortController | undefined;
   let opening = 0;
-  const mode = () =>
-    new FormData(form).get("ai-mode") === "edit" ? "edit" : "question";
 
-  function resetResult() {
-    preview = undefined;
-    feedback.hidden = true;
-    $("ai-result").hidden = true;
-    apply.hidden = true;
-    $("ai-formula").hidden = true;
-    changesTable.hidden = true;
-    changeRows.replaceChildren();
-  }
-  function showError(error: unknown) {
-    feedback.textContent =
-      error instanceof DOMException && error.name === "TimeoutError"
-        ? "AI 응답 시간이 초과됐습니다. 선택 범위를 줄여 다시 요청해 주세요."
-        : error instanceof TypeError
-          ? "AI 서버와 연결하지 못했습니다. 잠시 후 다시 요청해 주세요."
-          : error instanceof Error
-            ? error.message
-            : "AI 요청을 처리하지 못했습니다. 다시 시도해 주세요.";
+  function showError(message: string) {
+    feedback.textContent = message;
     feedback.hidden = false;
-    feedback.scrollIntoView({ block: "nearest" });
   }
-  function updateMode() {
-    const editing = mode() === "edit";
-    $("ai-edit-scope").hidden = !editing;
-    if (editing)
-      $("ai-range-label").textContent =
-        `선택 범위 ${options.editor().range().getA1Notation()}`;
-    for (const button of form.querySelectorAll<HTMLButtonElement>(
-      "[data-ai-mode]",
-    ))
-      button.hidden = button.dataset.aiMode !== mode();
-    prompt.placeholder = editing
-      ? "예: 빈칸을 0으로 채워 줘"
-      : "예: 완료된 행의 금액을 합산하는 수식을 알려 줘";
-    send.textContent = pending
-      ? "AI 응답을 기다리고 있어요…"
-      : editing
-        ? "변경안 만들기"
-        : "AI에게 질문하기";
-    send.disabled = Boolean(pending);
-    const provider =
-      status?.provider === "openai" || status?.sharedOpenAI
-        ? "OpenAI"
-        : status?.provider === "claude"
-          ? "관리형 Claude"
-          : "AI 제공자";
-    $("ai-privacy").textContent =
-      `${editing ? "변경안을 만들려면 선택한 셀을 전송해야 합니다. " : ""}질문과 동의한 셀만 ${provider}에 전송됩니다.`;
+
+  function updateScope() {
+    const provider = status?.provider === "openai" || status?.sharedOpenAI
+      ? "OpenAI"
+      : status?.provider === "claude" ? "Claude" : "AI";
+    $("ai-scope").hidden = Boolean(selected);
+    $("ai-range").textContent = "";
+    $("ai-privacy").textContent = `보낸 글과 최근 대화가 ${provider}에 전달됩니다.`;
+    const editor = options.editor();
+    if (selected || !link.checked || !editor) return;
+    try {
+      const range = resolveAIRange(editor, prompt.value);
+      $("ai-range").textContent = `작업 범위 ${range.getA1Notation()}`;
+      $("ai-privacy").textContent = `보낼 때 이 범위의 셀과 최근 대화가 ${provider}에 전달됩니다.`;
+      return { editor, range };
+    } catch {
+      $("ai-range").textContent = "표에 적용하려면 200셀 안에서 범위를 적어 주세요.";
+    }
   }
+
+  function updateComposer() {
+    const busy = Boolean(pending);
+    send.disabled = busy || !status?.aiAvailable || (status.managed && !status.signedIn);
+    send.textContent = busy ? "작성 중…" : selected ? "초안 받기" : "보내기";
+    link.disabled = busy;
+    $("ai-progress").textContent = busy ? "AI가 답변을 작성하고 있어요." : "";
+    $("ai-message-entry").hidden = Boolean(selected);
+    $("ai-starters").hidden = Boolean(selected);
+    $("ai-template").hidden = !selected;
+    reset.hidden = !history.length;
+    reset.disabled = cancel.disabled = busy;
+    for (const button of starters) button.disabled = busy;
+    prompt.readOnly = busy;
+    for (const field of fields.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input,textarea"))
+      field.readOnly = busy;
+    updateScope();
+  }
+
+  function selectTemplate(key: TemplateKey | null) {
+    selected = key;
+    feedback.hidden = true;
+    fields.replaceChildren();
+    if (key) {
+      const template = templates[key];
+      $("ai-template-title").textContent = `${template.title}에 들어갈 내용`;
+      for (const field of template.fields) {
+        const group = document.createElement("div");
+        const label = document.createElement("label");
+        const input = document.createElement(field.multiline ? "textarea" : "input");
+        input.id = `ai-field-${field.name}`;
+        input.name = field.name;
+        input.required = !field.optional;
+        input.maxLength = field.limit;
+        input.placeholder = `예: ${field.example}`;
+        if (input instanceof HTMLTextAreaElement) input.rows = 3;
+        label.htmlFor = input.id;
+        label.textContent = field.label + (field.optional ? " (선택)" : " (필수)");
+        group.append(label, input);
+        fields.append(group);
+      }
+    }
+    updateComposer();
+  }
+
+  function readPrompt() {
+    if (!selected) {
+      const text = prompt.value.trim();
+      if (text) return text;
+      prompt.focus();
+      throw new Error("보낼 메시지를 적어 주세요.");
+    }
+    const template = templates[selected];
+    const lines = [];
+    for (const field of template.fields) {
+      const input = $<HTMLInputElement | HTMLTextAreaElement>(`ai-field-${field.name}`);
+      const value = input.value.trim();
+      if (!value && !field.optional) {
+        input.setAttribute("aria-invalid", "true");
+        input.focus();
+        throw new Error(`‘${field.label}’ 항목을 적어 주세요.`);
+      }
+      if (value) lines.push(`${field.label}: ${value}`);
+    }
+    return `${template.title} 초안을 작성해 주세요.\n\n${lines.join("\n")}`;
+  }
+
+  function appendMessage(message: Message) {
+    const article = document.createElement("article");
+    article.className = "ai-message";
+    article.dataset.role = message.role;
+    const heading = document.createElement("h4");
+    heading.textContent = message.role === "user" ? "나" : "AI 답변";
+    const body = document.createElement("p");
+    body.className = "ai-message-body";
+    body.textContent = message.content;
+    article.append(heading, body);
+    if (message.role === "assistant") {
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.className = "ai-copy";
+      copy.textContent = "복사";
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(message.content);
+          copy.textContent = "복사했어요";
+        } catch {
+          const range = document.createRange();
+          range.selectNodeContents(body);
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          copy.textContent = "선택한 답변을 복사해 주세요";
+        }
+      });
+      article.append(copy);
+    }
+    messages.append(article);
+    return article;
+  }
+
+  function appendChanges(article: HTMLElement, selection: AISelection, changes: ReturnType<typeof reviewAIChanges>) {
+    const panel = document.createElement("section");
+    panel.className = "ai-plan";
+    const summary = document.createElement("p");
+    summary.className = "ai-plan-summary";
+    summary.setAttribute("role", "status");
+    summary.textContent = `${selection.label} · ${changes.length}개 셀 변경안`;
+    const scroll = document.createElement("div");
+    scroll.className = "ai-plan-scroll";
+    scroll.tabIndex = 0;
+    scroll.setAttribute("aria-label", "셀 변경안 목록");
+    const table = document.createElement("table");
+    const heading = table.createTHead().insertRow();
+    for (const label of ["셀", "바꾸기 전", "바꾼 뒤"]) {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = label;
+      heading.append(cell);
+    }
+    const body = table.createTBody();
+    for (const change of changes) {
+      const row = body.insertRow();
+      row.insertCell().textContent = change.address;
+      row.insertCell().textContent = String(change.cell.before ?? "빈칸");
+      row.insertCell().textContent = String(change.formula ?? change.after ?? "빈칸");
+    }
+    scroll.append(table);
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.className = "primary";
+    apply.textContent = "엑셀에 적용";
+    apply.addEventListener("click", () => {
+      if (pending) return;
+      try {
+        const editor = options.editor();
+        if (!editor) throw new Error("시트를 준비한 뒤 다시 시도해 주세요.");
+        applyAIChanges(editor, selection, changes);
+        apply.disabled = true;
+        apply.textContent = "적용했어요";
+        summary.textContent = `${selection.label}에 ${changes.length}개 셀을 적용했어요.`;
+        options.changed();
+        dialog.close();
+        editor.select(selection.label);
+        options.toast("엑셀에 적용했어요. 실행 취소로 되돌릴 수 있어요.");
+      } catch (error) {
+        showError(error instanceof Error ? error.message : "변경안을 적용하지 못했어요.");
+      }
+    });
+    panel.append(summary, scroll, apply);
+    article.append(panel);
+  }
+
   function showStatus() {
     const notice = $("ai-status");
     if (status?.managed && !status.signedIn) {
       const link = document.createElement("a");
       link.href = `https://mcp.coders.kr/sso/login?return_to=${encodeURIComponent(location.origin)}`;
-      link.textContent = "로그인하기 →";
-      notice.replaceChildren("AI 사용에는 Coders 로그인이 필요합니다. ", link);
-    } else if (!status?.aiAvailable) {
-      notice.textContent =
-        "AI 연결 전입니다. 엑셀 편집과 저장은 지금도 사용할 수 있어요.";
+      link.textContent = "로그인하기";
+      notice.replaceChildren("AI 채팅을 쓰려면 로그인해 주세요.", link);
     } else {
-      notice.textContent =
-        status.provider === "openai"
-          ? status.sharedOpenAI
-            ? "OpenAI · 사이트 제공"
-            : "OpenAI 연결 설정됨"
-          : "Coders 관리형 AI 연결 설정됨";
+      notice.textContent = status?.aiAvailable
+        ? "AI에 연결됐어요."
+        : "AI에 연결할 수 없어요. 잠시 후 채팅을 다시 열어 주세요.";
     }
     $("ai-owner").hidden = !status?.openAIUserRef;
     $("ai-owner-code").textContent = status?.openAIUserRef ?? "";
-    updateMode();
+    updateComposer();
   }
+
   $("ai-open").addEventListener("click", async () => {
     const id = ++opening;
     status = undefined;
-    include.checked = false;
     $("ai-owner").hidden = true;
-    $("ai-status").textContent = "AI 연결 상태를 확인하고 있어요.";
-    resetResult();
-    updateMode();
+    $("ai-status").textContent = "AI에 연결하고 있어요.";
+    updateComposer();
     dialog.showModal();
     try {
       const response = await fetch("/api/status", {
@@ -192,34 +339,49 @@ export function mountAiPanel(options: Options) {
         showStatus();
       }
     } catch {
-      if (dialog.open && id === opening)
-        $("ai-status").textContent =
-          "AI 연결 상태를 확인하지 못했습니다. 잠시 후 다시 열어 주세요.";
+      if (dialog.open && id === opening) showStatus();
     }
   });
+
   dialog.addEventListener("close", () => {
     pending?.abort();
     pending = undefined;
-    resetResult();
+    updateComposer();
   });
-  form.querySelector(".ai-modes")!.addEventListener("change", () => {
-    pending?.abort();
-    pending = undefined;
-    include.checked = false;
-    resetResult();
-    updateMode();
-  });
-  form
-    .querySelectorAll<HTMLButtonElement>("[data-prompt]")
-    .forEach((button) => {
-      button.onclick = () => {
-        prompt.value = button.dataset.prompt ?? "";
-        prompt.focus();
-      };
+
+  for (const button of starters) {
+    button.addEventListener("click", () => {
+      selectTemplate(button.dataset.template as TemplateKey);
+      fields.querySelector("input")?.focus();
     });
+  }
+  cancel.addEventListener("click", () => {
+    const previous = selected;
+    selectTemplate(null);
+    starters.find((button) => button.dataset.template === previous)?.focus();
+  });
+  reset.addEventListener("click", () => {
+    history.length = 0;
+    messages.replaceChildren();
+    prompt.value = "";
+    selectTemplate(null);
+    thread.scrollTop = 0;
+    prompt.focus();
+  });
+  form.addEventListener("input", (event) => {
+    if (event.target instanceof HTMLElement) event.target.removeAttribute("aria-invalid");
+    feedback.hidden = true;
+    if (event.target === prompt || event.target === link) updateScope();
+  });
+  prompt.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229 || send.disabled) return;
+    if (matchMedia("(pointer: coarse)").matches && !event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    form.requestSubmit();
+  });
   $("ai-copy-code").addEventListener("click", async () => {
+    if (!status?.openAIUserRef) return;
     try {
-      if (!status?.openAIUserRef) return;
       await navigator.clipboard.writeText(status.openAIUserRef);
       options.toast("연결 코드를 복사했습니다.");
     } catch {
@@ -229,165 +391,81 @@ export function mountAiPanel(options: Options) {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (pending) return;
-    resetResult();
-    let request: AbortController | undefined;
+    if (send.disabled || pending || !dialog.open) return;
+    feedback.hidden = true;
+    let text: string;
+    let selection: AISelection | undefined;
     try {
-      if (status?.managed && !status.signedIn)
-        throw new Error("위의 로그인하기를 누른 뒤 다시 요청해 주세요.");
-      if (!status?.aiAvailable)
-        throw new Error(
-          "AI가 아직 연결되지 않았습니다. 편집 기능은 계속 사용할 수 있습니다.",
-        );
-      const action = mode();
-      if (action === "edit" && !include.checked) {
-        include.focus();
-        throw new Error("표를 바꾸려면 선택한 셀 내용 전송에 동의해 주세요.");
+      text = readPrompt();
+      const scope = updateScope();
+      if (scope) selection = captureAISelection(scope.editor, scope.range);
+    } catch (error) {
+      showError((error as Error).message);
+      return;
+    }
+    const isTemplate = Boolean(selected);
+    const request = new AbortController();
+    pending = request;
+    updateComposer();
+    try {
+      const input = { mode: "chat", prompt: text, history: recentHistory(history), context: selection?.context };
+      const encoder = new TextEncoder();
+      let body = JSON.stringify(input);
+      while (input.history.length && encoder.encode(body).length > 65536) {
+        input.history = input.history.slice(2);
+        body = JSON.stringify(input);
       }
-      const editor = options.editor();
-      const workbook = editor.current();
-      const sheet = workbook.getActiveSheet();
-      const bounds = editor.range().getRange();
-      const cell = sheet.getRange(bounds.startRow, bounds.startColumn);
-      const target = {
-        bookId: workbook.getId(),
-        sheetId: sheet.getSheetId(),
-        address: cell.getA1Notation(),
-        previous: JSON.stringify(cell.getCellData()),
-      };
-      const selection = include.checked
-        ? captureAISelection(editor)
-        : undefined;
-      pending = request = new AbortController();
-      updateMode();
+      if (encoder.encode(body).length > 65536)
+        throw new Error("보낼 내용이 너무 길어요. 셀 범위나 메시지를 줄여 주세요.");
       const response = await fetch("/api/ai", {
         method: "POST",
         redirect: "manual",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: action,
-          prompt: prompt.value,
-          context: selection?.context ?? "",
-        }),
+        body,
         signal: AbortSignal.any([request.signal, AbortSignal.timeout(45000)]),
       });
       if (request !== pending || !dialog.open) return;
-      if (response.type === "opaqueredirect")
-        throw new Error("Coders 로그인 상태를 확인한 뒤 다시 요청해 주세요.");
+      if (response.type === "opaqueredirect" || response.status === 401) {
+        if (status?.managed) {
+          status = { ...status, signedIn: false };
+          showStatus();
+          $("ai-status").scrollIntoView({ block: "nearest" });
+        }
+        throw new Error("로그인한 뒤 다시 보내 주세요.");
+      }
       if (!response.headers.get("content-type")?.includes("application/json"))
-        throw new Error("로그인 또는 AI 사용량을 확인해 주세요.");
+        throw new Error("AI에 연결하지 못했어요. 잠시 후 다시 보내 주세요.");
       const data = await response.json();
       if (request !== pending || !dialog.open) return;
       if (!response.ok)
-        throw new Error(
-          typeof data.error === "string"
-            ? data.error
-            : "AI 요청에 실패했습니다.",
-        );
-      $("ai-explanation").textContent =
-        typeof data.explanation === "string" ? data.explanation : "";
-      if (action === "edit" && selection) {
-        const changes = reviewAIChanges(selection, data.edits);
-        $("ai-result-label").textContent = changes.length
-          ? `${selection.label} · ${changes.length}개 셀 변경안`
-          : "바뀌는 셀이 없어요";
-        for (const change of changes) {
-          const row = document.createElement("tr");
-          const address = document.createElement("th");
-          address.scope = "row";
-          const before = document.createElement("td");
-          const after = document.createElement("td");
-          address.textContent = change.address;
-          before.textContent = displayValue(change.cell.before);
-          after.textContent = displayValue(change.after);
-          row.append(address, before, after);
-          changeRows.append(row);
-        }
-        if (changes.length) preview = { mode: "edit", selection, changes };
-        changesTable.hidden = !changes.length;
-        apply.textContent = `${changes.length}개 셀에 적용`;
-        $("ai-result-note").textContent = changes.length
-          ? "적용하면 실제 셀이 바뀝니다. 실행 취소로 한 번에 되돌릴 수 있어요."
-          : "요청이나 선택 범위를 바꿔 다시 시도해 보세요.";
-      } else {
-        const formula =
-          typeof data.formula === "string" && data.formula.startsWith("=")
-            ? data.formula
-            : null;
-        if (formula) preview = { mode: "question", ...target, formula };
-        $("ai-result-label").textContent = "AI의 제안";
-        $("ai-formula").textContent = formula;
-        $("ai-formula").hidden = !formula;
-        apply.textContent = `${target.address}에 수식 적용`;
-        $("ai-result-note").textContent = "범위와 계산 결과를 확인해 주세요.";
-      }
-      apply.hidden = !preview;
-      $("ai-result").hidden = false;
-      $("ai-result").scrollIntoView({ block: "nearest" });
-    } catch (error) {
-      if (!request?.signal.aborted) showError(error);
-    } finally {
-      if (request && request === pending) {
-        pending = undefined;
-        updateMode();
-      }
-    }
-  });
+        throw new Error(typeof data.error === "string" ? data.error : "답변을 받지 못했어요. 다시 보내 주세요.");
+      if (typeof data.reply !== "string" || !data.reply.trim())
+        throw new Error("답변이 비어 있어요. 다시 보내 주세요.");
+      const changes = selection ? reviewAIChanges(selection, data.edits) : [];
 
-  apply.addEventListener("click", async () => {
-    const current = preview;
-    if (!current || apply.disabled) return;
-    apply.disabled = true;
-    try {
-      const editor = options.editor();
-      if (current.mode === "edit") {
-        applyAIChanges(editor, current.selection, current.changes);
-        $("ai-result-label").textContent =
-          `${current.changes.length}개 셀에 적용했습니다`;
-      } else {
-        const target = () => {
-          const workbook = editor.current();
-          const sheet = workbook.getActiveSheet();
-          if (
-            workbook.getId() !== current.bookId ||
-            sheet.getSheetId() !== current.sheetId
-          )
-            throw new Error(
-              "질문할 때의 문서와 시트로 돌아간 뒤 적용해 주세요.",
-            );
-          const cell = sheet.getRange(current.address);
-          if (JSON.stringify(cell.getCellData()) !== current.previous)
-            throw new Error("셀 내용이 바뀌었습니다. 다시 질문해 주세요.");
-          return cell;
-        };
-        const cell = target();
-        if (
-          cell.getValue() != null &&
-          cell.getValue() !== "" &&
-          !(await options.modal(
-            "기존 셀 덮어쓰기",
-            `<p>${current.address}의 내용을 AI 수식으로 바꿀까요?</p>`,
-            "적용",
-          ))
-        )
-          return;
-        if (preview !== current || !dialog.open) return;
-        target().setValue(current.formula);
-        $("ai-result-label").textContent =
-          `${current.address}에 수식을 적용했습니다`;
-      }
-      options.changed();
-      preview = undefined;
-      apply.hidden = true;
-      $("ai-result-note").textContent =
-        "편집기의 실행 취소로 적용 전 상태를 복구할 수 있어요.";
-      $("ai-result-label").focus();
+      const user: Message = { role: "user", content: text };
+      const answer: Message = { role: "assistant", content: data.reply };
+      history.push(user, answer);
+      appendMessage(user);
+      const reply = appendMessage(answer);
+      if (selection && changes.length) appendChanges(reply, selection, changes);
+      if (!isTemplate) prompt.value = "";
+      selectTemplate(null);
+      reply.scrollIntoView({ block: "start" });
     } catch (error) {
-      preview = undefined;
-      apply.hidden = true;
-      showError(error);
+      if (request !== pending || !dialog.open) return;
+      showError(
+        error instanceof DOMException && error.name === "TimeoutError"
+          ? "답변이 늦어지고 있어요. 잠시 후 다시 보내 주세요."
+          : error instanceof TypeError
+            ? "AI에 연결하지 못했어요. 잠시 후 다시 보내 주세요."
+            : error instanceof Error ? error.message : "답변을 받지 못했어요.",
+      );
     } finally {
-      apply.disabled = false;
+      if (request === pending) {
+        pending = undefined;
+        updateComposer();
+      }
     }
   });
 }

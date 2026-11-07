@@ -31,7 +31,7 @@ test('AI provider request forwards trusted identity, limits context and parses r
   let body: Record<string, unknown> = {}; let headers: Record<string, string> = {};
   const request = async (url: string, init: RequestInit) => { assert.equal(url, 'https://example.invalid/llm/v1/messages'); assert.equal(init.redirect, 'error'); body = JSON.parse(init.body as string); headers = init.headers as Record<string, string>; return new Response(JSON.stringify({ content: [{ type: 'text', text: '{"explanation":"합계 수식입니다.","formula":"=SUM(B2:B10)"}' }] }), { headers: { 'content-type': 'application/json' } }); };
   const result = await askAI({ prompt: 'B2:B10 합계', context: '' }, 'test-user', { ANTHROPIC_API_KEY: 'unit-test-placeholder', ANTHROPIC_BASE_URL: 'https://example.invalid/llm' }, request);
-  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.5.1'); assert.equal(body.max_tokens, 1200);
+  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.6.0'); assert.equal(body.max_tokens, 1200);
 });
 const editContext = JSON.stringify({
   sheet: '품목', range: 'B2:C3',
@@ -42,6 +42,70 @@ const editInput = { mode: 'edit', prompt: '빈칸을 0으로 채워 줘', contex
 const acceptedEdit = { address: 'B2', kind: 'set', value: 0 };
 const openAIConfig = { OPENAI_API_KEY: 'unit-test-placeholder' };
 const editAnswer = { explanation: 'B2를 채웠습니다.', edits: [acceptedEdit] };
+
+test('OpenAI chat forwards only text turns and returns a plain draft', async () => {
+  const history = [
+    { role: 'user', content: '경로당 식사 시간 변경 안내문 작성', extra: '제외할 데이터' },
+    { role: 'assistant', content: '3월 15일부터 오전 11시에 식사를 제공합니다.' },
+  ];
+  const prompt = '한 문장으로 줄여 주세요.';
+  const reply = '3월 15일부터 경로당 식사는 오전 11시에 시작합니다.';
+  const result = await askAI({ mode: 'chat', prompt, history }, undefined, openAIConfig, async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(init.body as string);
+    assert.equal(body.store, false);
+    assert.equal(body.text, undefined);
+    assert.equal(body.tools, undefined);
+    assert.deepEqual(body.input, [
+      { role: 'user', content: history[0].content }, history[1], { role: 'user', content: prompt },
+    ]);
+    return Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: reply }] }] });
+  });
+  assert.deepEqual(result, { status: 200, body: { reply, provider: 'openai' } });
+  for (const badHistory of [
+    [{ role: 'system', content: '무단 지시' }, history[1]],
+    [history[0]],
+    [{ role: 'user', content: '가'.repeat(2001) }, history[1]],
+    [...history, ...history, ...history, ...history, ...history],
+  ]) assert.throws(() => validateRequest({ mode: 'chat', prompt, history: badHistory }));
+});
+
+test('chat proposes scoped cell updates and safe formulas in the same reply', async () => {
+  const input = { mode: 'chat', prompt: 'B2를 12로 채우고 C3에 B2의 합계 수식을 넣어 줘.', context: editContext };
+  const edits = [
+    { address: 'B2', kind: 'set', value: 12 },
+    { address: 'C3', kind: 'formula', value: '=SUM(B2:B2)' },
+  ];
+  const explanation = '두 셀을 바꿀 수 있어요.';
+  const output = (edits: unknown[]) => Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ explanation, edits }) }] }] });
+  const result = await askAI(input, undefined, openAIConfig, async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(init.body as string);
+    assert.equal(body.text.format.name, 'spreadsheet_chat');
+    assert.equal(body.text.format.strict, true);
+    assert.deepEqual(body.input, [{ role: 'user', content: JSON.stringify({ request: input.prompt, selection: JSON.parse(editContext) }) }]);
+    return output(edits);
+  });
+  assert.deepEqual(result, { status: 200, body: { reply: explanation, edits, provider: 'openai' } });
+  for (const edit of [
+    { address: 'A1', kind: 'set', value: 1 },
+    { address: 'B3', kind: 'clear', value: null },
+    { address: 'C3', kind: 'formula', value: '=WEBSERVICE("https://example.invalid")' },
+  ]) assert.equal((await askAI(input, undefined, openAIConfig, async () => output([edits[0], edit]))).status, 502);
+});
+
+test('managed Claude chat revises a draft in the same thread', async () => {
+  const history = [
+    { role: 'user', content: '스마트폰 교육 신청서 초안' },
+    { role: 'assistant', content: '가족과 사진을 공유하는 방법을 배우고 싶어 신청합니다.' },
+  ];
+  const prompt = '더 공손하게 써 주세요.';
+  const reply = '가족과 사진을 나누는 방법을 배우고자 교육에 신청합니다.';
+  const config = { ANTHROPIC_API_KEY: 'unit-test-placeholder', ANTHROPIC_BASE_URL: 'https://example.invalid/llm' };
+  const result = await askAI({ mode: 'chat', prompt, history }, 'test-user', config, async (_url: string, init: RequestInit) => {
+    assert.deepEqual(JSON.parse(init.body as string).messages, [...history, { role: 'user', content: prompt }]);
+    return Response.json({ stop_reason: 'end_turn', content: [{ type: 'text', text: reply }] });
+  });
+  assert.deepEqual(result, { status: 200, body: { reply, provider: 'claude' } });
+});
 
 test('OpenAI Responses requests strict typed edits with consent and no Coders identity', async () => {
   const config = {

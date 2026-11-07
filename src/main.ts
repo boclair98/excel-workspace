@@ -108,7 +108,7 @@ $("app").innerHTML = `
     </div>
     <div class="file-primary">
       <button id="export" class="primary" aria-label="XLSX 저장" title="XLSX 저장">${icon("download")}<span>XLSX<span class="desktop-label"> 저장</span></span></button>
-      <button id="ai-open" class="ai-trigger" aria-label="AI 도우미" title="AI 도우미">${icon("sparkles")}<span>AI 도우미</span></button>
+      <button id="ai-open" class="ai-trigger" title="AI 채팅">${icon("sparkles")}<span>AI 채팅</span></button>
     </div>
   </nav>
 </div>
@@ -864,16 +864,11 @@ $("cell-input").addEventListener("keydown", (e) => {
 bind("help", async () => {
   await modal(
     "오픈소스 엑셀 사용 안내",
-    "<p>셀을 더블 클릭하거나 위의 입력줄로 값을 수정하세요. <b>=</b>로 시작하면 수식을 계산합니다. 셀 주소에 <b>A1:D10</b>을 입력하면 범위를 선택합니다.</p><p>Tab·Enter·방향키로 셀 이동, Ctrl+C/V로 복사·붙여넣기, Ctrl+Z로 실행 취소합니다. 시트 탭의 +로 시트를 추가하고, 우클릭 메뉴에서 행·열과 시트를 관리합니다.</p><p><b>보관</b>은 이 브라우저의 IndexedDB 저장입니다. 브라우저 데이터 삭제 시 사라질 수 있습니다. <b>XLSX 저장</b>이나 JSON 백업으로 별도 보관하세요. 다른 기기와 자동 동기화하거나 공동 편집하지 않습니다.</p><p>Univer(Apache-2.0)·ExcelJS(MIT) 기반의 독립 편집기입니다. Microsoft Excel 공식 제품이 아니며 차트·피벗·매크로·그림·고급 서식과 완전 호환을 보장하지 않습니다. 모바일은 간편 입력을 제공하며 복잡한 편집은 PC를 권장합니다.</p><p>AI 도우미의 <b>질문</b>은 수식과 요약을 제안합니다. <b>표 바꾸기</b>는 선택한 범위의 값을 편집합니다. 선택한 셀은 동의할 때만 제공자에게 전송되며, 변경 전후를 확인하고 적용할 수 있습니다.</p>",
+    "<p>셀을 더블 클릭하거나 위의 입력줄로 값을 수정하세요. <b>=</b>로 시작하면 수식을 계산합니다. 셀 주소에 <b>A1:D10</b>을 입력하면 범위를 선택합니다.</p><p>Tab·Enter·방향키로 셀 이동, Ctrl+C/V로 복사·붙여넣기, Ctrl+Z로 실행 취소합니다. 시트 탭의 +로 시트를 추가하고, 우클릭 메뉴에서 행·열과 시트를 관리합니다.</p><p><b>보관</b>은 이 브라우저의 IndexedDB 저장입니다. 브라우저 데이터 삭제 시 사라질 수 있습니다. <b>XLSX 저장</b>이나 JSON 백업으로 별도 보관하세요. 다른 기기와 자동 동기화하거나 공동 편집하지 않습니다.</p><p>Univer(Apache-2.0)·ExcelJS(MIT) 기반의 독립 편집기입니다. Microsoft Excel 공식 제품이 아니며 차트·피벗·매크로·그림·고급 서식과 완전 호환을 보장하지 않습니다. 모바일은 간편 입력을 제공하며 복잡한 편집은 PC를 권장합니다.</p><p><b>AI 채팅</b>에서 안내문이나 신청서를 골라 필요한 항목을 적거나 바로 메시지를 보낼 수 있습니다. 초안은 채팅에서 읽고 복사할 수 있습니다.</p>",
     "확인",
   );
 });
-mountAiPanel({
-  editor: () => editor,
-  changed: updateAfterEdit,
-  toast,
-  modal,
-});
+mountAiPanel({ editor: () => loading ? undefined : editor, changed: updateAfterEdit, toast });
 window.addEventListener("beforeunload", (e) => {
   if (dirty) {
     e.preventDefault();

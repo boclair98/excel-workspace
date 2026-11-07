@@ -127,147 +127,154 @@ test('XLSX upload and multi-sheet content, CSV and JSON backup roundtrip', async
   expect(errors).toEqual([]);
 });
 
-test('AI edit reviews typed cell changes, applies them to XLSX and undoes them together', async ({ page }, info) => {
+test('guided notice uses plain chat, copies the draft and carries context into revisions', async ({ page, context }, info) => {
+  const requests: { mode: string; prompt: string; history: unknown[] }[] = [];
+  const draft = '경로당 식사 시간 변경 안내\n\n3월 15일부터 오전 11시에 식사를 제공합니다.';
+  const revision = '3월 15일부터 경로당 식사는 오전 11시에 시작합니다.';
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'openai', managed: true, signedIn: true, sharedOpenAI: true } }));
+  await page.route('**/api/ai', route => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ json: { reply: requests.length === 1 ? draft : revision } });
+  });
+  await page.goto('/');
+  await ready(page);
+  await setCell(page, 'B2', '채팅에 보내지 않을 셀');
+  await page.locator('#ai-open').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#ai-status')).toHaveText('AI에 연결됐어요.');
+  await page.getByRole('button', { name: /안내문/ }).click();
+  await expect(page.getByLabel(/안내 제목/)).toBeFocused();
+  await page.getByRole('button', { name: '초안 받기' }).click();
+  await expect(page.locator('#ai-error')).toContainText('안내 제목');
+  expect(requests).toHaveLength(0);
+  await page.getByLabel(/안내 제목/).fill('경로당 식사 시간 변경');
+  await page.getByLabel(/안내할 내용/).fill('3월 15일부터 오전 11시에 식사를 제공합니다.');
+  await page.getByRole('button', { name: '초안 받기' }).click();
+  const answers = page.locator('.ai-message[data-role="assistant"]');
+  await expect(answers.first()).toContainText('3월 15일부터 오전 11시');
+  expect(requests[0]).toEqual({
+    mode: 'chat',
+    prompt: '안내문 초안을 작성해 주세요.\n\n안내 제목: 경로당 식사 시간 변경\n안내할 내용: 3월 15일부터 오전 11시에 식사를 제공합니다.',
+    history: [],
+  });
+  await answers.first().getByRole('button', { name: '복사', exact: true }).click();
+  await expect(answers.first().getByRole('button', { name: '복사했어요' })).toBeVisible();
+  const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clipboard.replace(/\r\n/g, '\n')).toBe(draft);
+
+  await page.getByRole('checkbox', { name: '셀 연결' }).uncheck();
+  await page.getByLabel('메시지', { exact: true }).fill('한 문장으로 줄여 주세요.');
+  await page.getByRole('button', { name: '보내기', exact: true }).click();
+  await expect(answers.last()).toContainText(revision);
+  expect(requests[1]).toEqual({
+    mode: 'chat',
+    prompt: '한 문장으로 줄여 주세요.',
+    history: [{ role: 'user', content: requests[0].prompt }, { role: 'assistant', content: draft }],
+  });
+  await page.screenshot({ path: info.outputPath('ai-draft-desktop.png') });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ai-open')).toBeFocused();
+  await expect(page.locator('#cell-input')).toHaveValue('채팅에 보내지 않을 셀');
+  await page.locator('#ai-open').click();
+  await expect(answers.last()).toContainText(revision);
+  await page.getByRole('button', { name: '새 대화' }).click();
+  await expect(answers).toHaveCount(0);
+});
+
+test('one chat prompt previews values and a formula, applies them to XLSX and undoes together', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const source = new ExcelJS.Workbook();
-  const sheet = source.addWorksheet('AI 검증');
-  sheet.getCell('A2').value = '범위 밖';
-  sheet.getCell('B2').value = '  상품  ';
-  sheet.getCell('B2').font = { bold: true };
-  sheet.getCell('C2').value = '지울 값';
-  sheet.getCell('D2').value = '코드';
-  sheet.getCell('C3').value = true;
-  sheet.getCell('D3').value = { formula: 'B3+2', result: 2 };
+  const sheet = source.addWorksheet('채팅 적용 검증');
+  sheet.getCell('A2').value = '범위 밖 유지';
+  sheet.getCell('B2').value = 12;
+  sheet.getCell('C2').value = '  접수  ';
+  sheet.getCell('D3').value = { formula: 'B2*2', result: 24 };
   const file = info.outputPath('ai-source.xlsx');
   await source.xlsx.writeFile(file);
   const requests: { mode: string; context: string }[] = [];
-  const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
-  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'openai', managed: true, signedIn: true, openAIUserRef: '1'.repeat(32) } }));
+  const edits = [
+    { address: 'B3', kind: 'set', value: 8 },
+    { address: 'C2', kind: 'set', value: '접수' },
+    { address: 'C3', kind: 'formula', value: '=SUM(B2:B3)' },
+  ];
+  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'openai', managed: true, signedIn: true, sharedOpenAI: true } }));
   await page.route('**/api/ai', route => {
     requests.push(route.request().postDataJSON());
-    return route.fulfill({ json: { explanation: '상품명과 코드, 빈칸을 정리합니다.', edits: [
-      { address: 'B2', kind: 'set', value: '상품' },
-      { address: 'C2', kind: 'clear', value: null },
-      { address: 'D2', kind: 'set', value: '00123' },
-      { address: 'B3', kind: 'set', value: 0 },
-      { address: 'C3', kind: 'set', value: false },
-    ] } });
+    return route.fulfill({ json: { reply: '세 셀을 수정할 수 있어요.', edits: requests.length === 1
+      ? [...edits, { address: 'A2', kind: 'clear', value: null }] : edits } });
   });
   await page.goto('/');
   await ready(page);
   await importFile(page, file);
-  await selectCell(page, 'B2:D3');
-  await page.locator('#ai-open').click();
-  await expect(page.locator('#ai-status')).toHaveText('OpenAI 연결 설정됨');
-  await page.getByRole('radio', { name: '표 바꾸기' }).check();
-  await expect(page.locator('#ai-range-label')).toHaveText('선택 범위 B2:D3');
-  await page.locator('#ai-prompt').fill('상품명과 코드를 정리하고 빈칸을 0으로 채워 줘');
-  await page.locator('#ai-send').click();
-  await expect(page.locator('#ai-error')).toContainText('전송에 동의');
-  expect(requests).toHaveLength(0);
-  await page.locator('#include-cells').check();
-  await page.locator('#ai-send').click();
-  await expect(page.locator('#ai-result-label')).toHaveText('B2:D3 · 5개 셀 변경안');
-  await expect(page.locator('#ai-change-rows tr')).toHaveCount(5);
-  await expect(page.locator('#ai-change-rows tr').first()).toContainText('“  상품  ”');
-  await expect(page.locator('#ai-change-rows tr').last()).toContainText('FALSE');
-  await expect(page.locator('#cell-input')).toHaveValue('  상품  ');
-  expect(requests).toHaveLength(1);
-  expect(requests[0].mode).toBe('edit');
-  const sent = JSON.parse(requests[0].context);
-  expect(sent.range).toBe('B2:D3');
-  expect(sent.values).toEqual([['  상품  ', '지울 값', '코드'], [null, true, 2]]);
-  expect(sent.formulas[1][2]).toBe('=B3+2');
-  expect(requests[0].context).not.toContain('범위 밖');
-  await page.locator('#ai-apply').click();
-  await expect(page.locator('#ai-result-label')).toHaveText('5개 셀에 적용했습니다');
-  await page.keyboard.press('Escape');
-  await expect(page.locator('#ai-open')).toBeFocused();
-  const applied = (await downloadedBook(page, info, 'ai-applied.xlsx')).worksheets[0];
-  expect(applied.getCell('A2').value).toBe('범위 밖');
-  expect(applied.getCell('B2').value).toBe('상품');
-  expect(applied.getCell('B2').font.bold).toBe(true);
-  expect(applied.getCell('C2').value).toBeNull();
-  expect(applied.getCell('D2').value).toBe('00123');
-  expect(applied.getCell('B3').value).toBe(0);
-  expect(applied.getCell('C3').value).toBe(false);
-  expect(applied.getCell('D3').formula).toBe('B3+2');
+  await page.getByRole('button', { name: 'AI 채팅', exact: true }).click();
+  await page.getByLabel('메시지', { exact: true }).fill('B2:D3에서 B3에 8, C2의 공백을 지우고 C3에 B2:B3 합계 수식을 넣어줘.');
+  await expect(page.locator('#ai-range')).toHaveText('작업 범위 B2:D3');
+  await page.getByLabel('메시지', { exact: true }).press('Enter');
+  await expect(page.locator('#ai-error')).toContainText('범위 밖');
+  await expect(page.getByRole('button', { name: '엑셀에 적용' })).toHaveCount(0);
+  expect(requests[0].mode).toBe('chat');
+  expect(JSON.parse(requests[0].context)).toEqual({ sheet: '채팅 적용 검증', range: 'B2:D3', values: [[12, '  접수  ', null], [null, null, 24]], formulas: [['', '', ''], ['', '', '=B2*2']] });
+  await page.getByRole('button', { name: '보내기', exact: true }).click();
+  await expect(page.locator('.ai-plan-summary')).toHaveText('B2:D3 · 3개 셀 변경안');
+  await expect(page.getByRole('table')).toContainText('=SUM(B2:B3)');
+  await expect(page.getByRole('button', { name: '엑셀에 적용' })).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: info.outputPath('ai-sheet-preview.png') });
+  await page.getByRole('button', { name: '엑셀에 적용' }).click();
+  await expect(page.locator('#ai-dialog')).toBeHidden();
+  const updated = (await downloadedBook(page, info, 'ai-updated.xlsx')).getWorksheet(1)!;
+  expect(updated.getCell('A2').value).toBe('범위 밖 유지');
+  expect(updated.getCell('B3').value).toBe(8);
+  expect(updated.getCell('C2').value).toBe('접수');
+  expect(updated.getCell('C3').formula).toBe('SUM(B2:B3)');
+  expect(updated.getCell('D3').formula).toBe('B2*2');
   await page.locator('#undo').click();
-  const undone = (await downloadedBook(page, info, 'ai-undone.xlsx')).worksheets[0];
-  expect(undone.getCell('B2').value).toBe('  상품  ');
-  expect(undone.getCell('C2').value).toBe('지울 값');
-  expect(undone.getCell('D2').value).toBe('코드');
-  expect(undone.getCell('B3').value).toBeNull();
-  expect(undone.getCell('C3').value).toBe(true);
-  expect(errors).toEqual([]);
+  const restored = (await downloadedBook(page, info, 'ai-undone.xlsx')).getWorksheet(1)!;
+  expect(restored.getCell('B3').value).toBeNull();
+  expect(restored.getCell('C2').value).toBe('  접수  ');
+  expect(restored.getCell('C3').value).toBeNull();
 });
 
-test('AI rejects out-of-range changes and fits the reviewed changes at four sizes', async ({ page }, info) => {
-  let expired = true;
-  let invalid = true;
-  let redirects = 0;
-  const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
-  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'claude', managed: true, signedIn: true, openAIUserRef: '2'.repeat(32) } }));
-  await page.route('https://example.invalid/expired-login', route => {
-    redirects++;
-    return route.fulfill({ status: 200, body: 'Login' });
+test('mobile application fields and composer remain usable and retain input after failure', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const requests: { mode: string; prompt: string; history: unknown[] }[] = [];
+  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'openai', managed: true, signedIn: true, sharedOpenAI: true } }));
+  await page.route('**/api/ai', route => {
+    requests.push(route.request().postDataJSON());
+    return requests.length === 1
+      ? route.fulfill({ status: 429, json: { error: '잠시 후 다시 보내 주세요.' } })
+      : route.fulfill({ json: { reply: '스마트폰 교육 신청서\n\n신청인 [직접 입력]\n사진을 주고받는 방법을 배우고자 교육을 신청합니다.' } });
   });
-  await page.route('**/api/ai', route => expired
-    ? route.fulfill({ status: 307, headers: { Location: 'https://example.invalid/expired-login' } })
-    : route.fulfill({ json: {
-    explanation: '선택한 범위의 빈칸에 새 값을 입력합니다.',
-    edits: [
-      { address: 'A1', kind: 'set', value: 0 },
-      { address: invalid ? 'D1' : 'B1', kind: 'set', value: '공급처 연락처 확인 후 재고 담당자에게 검토 요청' },
-      { address: 'C1', kind: 'set', value: '=1+1' },
-    ],
-  } }));
   await page.goto('/');
   await ready(page);
-  await selectCell(page, 'A1:C1');
-  await page.locator('#ai-open').click();
-  await expect(page.locator('#ai-status')).toContainText('관리형 AI');
-  await page.getByRole('radio', { name: '표 바꾸기' }).check();
-  await page.locator('#ai-prompt').fill('빈칸을 채워 줘');
-  await page.locator('#include-cells').check();
-  await page.locator('#ai-send').click();
-  await expect(page.locator('#ai-error')).toContainText('로그인 상태');
-  expect(redirects).toBe(0);
-  expired = false;
-  await page.locator('#ai-send').click();
-  await expect(page.locator('#ai-error')).toContainText('범위 밖');
-  await expect(page.locator('#ai-apply')).toBeHidden();
-  await expect(page.locator('#cell-input')).toHaveValue('');
-  invalid = false;
-  await page.locator('#ai-send').click();
-  await expect(page.locator('#ai-result-label')).toHaveText('A1:C1 · 3개 셀 변경안');
-  await expect(page.locator('#ai-error')).toBeHidden();
-  for (const viewport of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
-    await page.setViewportSize(viewport);
-    await page.locator('#ai-apply').scrollIntoViewIfNeeded();
-    await expect(page.locator('#ai-apply')).toBeInViewport();
-    expect(await page.locator('#ai-apply').evaluate(button => button.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
-    expect(await page.evaluate(() => {
-      const panel = document.querySelector('.ai-content')!;
-      const preview = document.getElementById('ai-changes')!;
-      return document.documentElement.scrollWidth <= innerWidth && panel.scrollWidth <= panel.clientWidth && preview.scrollWidth <= preview.clientWidth;
-    })).toBe(true);
-    await page.screenshot({ path: info.outputPath(`ai-preview-${viewport.width}.png`) });
-  }
-  await page.locator('#ai-apply').focus();
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#ai-result-label')).toHaveText('3개 셀에 적용했습니다');
-  await page.keyboard.press('Escape');
-  await expect(page.locator('#ai-open')).toBeFocused();
-  const applied = (await downloadedBook(page, info, 'ai-literal.xlsx')).worksheets[0];
-  expect(applied.getCell('C1').value).toBe('=1+1');
-  expect(applied.getCell('C1').formula).toBeUndefined();
-  expect(errors).toEqual([]);
+  await page.getByRole('button', { name: 'AI 채팅', exact: true }).click();
+  await page.getByRole('button', { name: /신청서/ }).click();
+  await expect(page.getByLabel(/이름.*선택/)).toBeVisible();
+  const topic = page.getByLabel(/신청 항목/);
+  const reason = page.getByLabel(/신청 사유/);
+  await topic.fill('주민센터 스마트폰 교육');
+  await reason.fill('가족과 사진을 주고받는 방법을 배우고 싶어요.');
+  await page.screenshot({ path: info.outputPath('ai-application-mobile.png') });
+  await page.setViewportSize({ width: 390, height: 480 });
+  const submit = page.getByRole('button', { name: '초안 받기' });
+  await expect(submit).toBeInViewport({ ratio: 1 });
+  await submit.click();
+  await expect(page.locator('#ai-error')).toContainText('잠시 후 다시 보내 주세요.');
+  await expect(topic).toHaveValue('주민센터 스마트폰 교육');
+  await expect(reason).toHaveValue('가족과 사진을 주고받는 방법을 배우고 싶어요.');
+  await submit.click();
+  await expect(page.locator('.ai-message[data-role="assistant"]')).toContainText('스마트폰 교육 신청서');
+  expect(requests[1]).toEqual({
+    mode: 'chat',
+    prompt: '신청서 초안을 작성해 주세요.\n\n신청 항목: 주민센터 스마트폰 교육\n신청 사유: 가족과 사진을 주고받는 방법을 배우고 싶어요.',
+    history: [],
+  });
+  await expect(page.getByRole('button', { name: '보내기', exact: true })).toBeInViewport({ ratio: 1 });
 });
 
 test('responsive editor and dialogs at 360, 390, 768 and 1440 pixels', async ({ page }, info) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'openai', managed: true, signedIn: true, sharedOpenAI: true } }));
   await page.goto('/'); await ready(page); await page.locator('#hint-example').click();
   await expect(page.locator('#document-name')).toHaveText('예시 가계부');
   for (const viewport of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
@@ -275,6 +282,10 @@ test('responsive editor and dialogs at 360, 390, 768 and 1440 pixels', async ({ 
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await selectCell(page, 'F6'); await expect(page.locator('#cell-input')).toHaveValue('=D6-E6');
     await expect(page.locator('#selection-status')).toContainText('2,835,000');
+    if (viewport.width <= 520) {
+      for (const label of ['#library-toggle > span', '#open > span', '#save > span', '#export .desktop-label'])
+        await expect(page.locator(label)).toBeInViewport({ ratio: 1 });
+    }
     await page.screenshot({ path: info.outputPath(`editor-${viewport.width}.png`) });
     if (viewport.width <= 800) {
       await page.locator('#library-toggle').click(); await expect(page.locator('#library-dialog')).toBeVisible();
@@ -284,8 +295,15 @@ test('responsive editor and dialogs at 360, 390, 768 and 1440 pixels', async ({ 
       await page.keyboard.press('Escape'); await expect(page.locator('#library-dialog')).toBeHidden();
       await expect(page.locator('#library-toggle')).toBeFocused();
     }
+    await expect(page.locator('#ai-open > span')).toBeVisible();
     await page.locator('#ai-open').click(); await expect(page.locator('#ai-dialog')).toBeVisible();
-    await expect(page.locator('#ai-status')).toContainText('AI 연결 전');
+    await expect(page.locator('#ai-status')).toHaveText('AI에 연결됐어요.');
+    await expect(page.locator('#ai-send')).toBeInViewport({ ratio: 1 });
+    expect(await page.locator('#ai-dialog').evaluate(dialog => dialog.scrollWidth <= dialog.clientWidth)).toBe(true);
+    expect(await page.locator('#ai-thread').evaluate(thread => thread.scrollWidth <= thread.clientWidth)).toBe(true);
+    if (viewport.width <= 800) expect((await page.locator('#ai-open').boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    for (const control of ['[data-template="notice"]', '[data-template="application"]', '#ai-send', '[data-close="ai-dialog"]'])
+      expect((await page.locator(control).boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await page.screenshot({ path: info.outputPath(`ai-${viewport.width}.png`) });
     await page.keyboard.press('Escape'); await expect(page.locator('#ai-dialog')).toBeHidden();
     await expect(page.locator('#ai-open')).toBeFocused();
@@ -316,10 +334,10 @@ test('keyboard ribbon and personalization, honest disconnected AI without data t
   await expect(page.locator('#layout')).toHaveValue('library');
   await page.keyboard.press('Escape');
   await expect(page.locator('#appearance')).toBeFocused();
-  await page.locator('#ai-open').click(); await expect(page.locator('#ai-status')).toContainText('AI 연결 전');
-  await expect(page.locator('#include-cells')).not.toBeChecked();
-  await page.locator('#ai-prompt').fill('B2:B10 합계 수식을 만들어 줘'); await page.locator('#ai-send').click();
-  await expect(page.locator('#ai-error')).toContainText('AI가 아직 연결되지 않았습니다');
-  await expect(page.locator('#ai-result')).toBeHidden(); expect(aiRequests).toBe(0);
+  await page.locator('#ai-open').click(); await expect(page.locator('#ai-status')).toContainText('AI에 연결할 수 없어요');
+  await page.locator('#ai-prompt').fill('B2:B10 합계 수식을 만들어 줘');
+  await expect(page.locator('#ai-send')).toBeDisabled();
+  await expect(page.locator('.ai-message')).toHaveCount(0);
+  expect(aiRequests).toBe(0);
   await page.screenshot({ path: info.outputPath('disconnected-ai.png') });
 });
