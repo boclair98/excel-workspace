@@ -92,8 +92,26 @@ function icons() {
   });
 }
 $("app").innerHTML = `
-<header class="topbar"><div class="brand">${icon("table-2")}<h1>오픈소스 엑셀</h1><span class="beta">BETA</span></div><div class="document-heading"><button id="rename" title="통합문서 이름 변경"><span id="document-name">새 통합문서</span>${icon("chevron-down")}</button><span id="save-state" role="status">이 브라우저에 자동 보관</span></div><button class="icon-btn" id="help" aria-label="이용 안내">${icon("help-circle")}</button></header>
-<nav class="filebar" aria-label="파일 도구"><div class="file-actions"><button id="library-toggle" class="icon-btn" aria-label="내 통합문서 열기">${icon("panel-left")}</button><span class="separator"></span><button id="new">${icon("plus")}새 문서</button><button id="open">${icon("folder-open")}열기</button><button id="save">${icon("save")}보관</button><button id="export" class="primary">${icon("download")}XLSX 저장</button><button id="csv" class="small-action">CSV</button></div><button id="ai-open" class="ai-trigger">${icon("sparkles")}<span>AI 도우미</span></button></nav>
+<div class="workbook-chrome">
+  <header class="topbar">
+    <div class="brand">${icon("table-2")}<h1>오픈소스 엑셀</h1></div>
+    <div class="document-heading"><button id="rename" title="통합문서 이름 변경"><span id="document-name">새 통합문서</span>${icon("chevron-down")}</button><span id="save-state" role="status">이 브라우저에 자동 보관</span></div>
+    <button class="icon-btn" id="help" aria-label="이용 안내" title="이용 안내">${icon("help-circle")}</button>
+  </header>
+  <nav class="filebar" aria-label="파일 도구">
+    <div class="file-actions">
+      <button id="library-toggle" aria-label="내 통합문서" aria-controls="sidebar" aria-expanded="false" title="내 통합문서">${icon("panel-left")}<span>보관함</span></button><span class="separator" aria-hidden="true"></span>
+      <button id="new" aria-label="새 문서" title="새 문서">${icon("plus")}<span>새 문서</span></button>
+      <button id="open" aria-label="열기" title="열기">${icon("folder-open")}<span>열기</span></button>
+      <button id="save" aria-label="보관" title="보관">${icon("save")}<span>보관</span></button>
+      <button id="csv" aria-label="CSV 저장" title="CSV 저장">CSV</button>
+    </div>
+    <div class="file-primary">
+      <button id="export" class="primary" aria-label="XLSX 저장" title="XLSX 저장">${icon("download")}<span>XLSX<span class="desktop-label"> 저장</span></span></button>
+      <button id="ai-open" class="ai-trigger" aria-label="AI 도우미" title="AI 도우미">${icon("sparkles")}<span>AI 도우미</span></button>
+    </div>
+  </nav>
+</div>
 <div class="workspace"><aside id="sidebar" class="sidebar" aria-label="내 통합문서"><div class="side-top"><h2>내 통합문서</h2><span id="book-count">0</span></div><label class="search">${icon("search")}<input id="search" type="search" placeholder="이름으로 찾기" aria-label="보관한 통합문서 검색"></label><div class="library" id="library"></div><div class="side-bottom"><button id="example">${icon("file-spreadsheet")}예시 가계부 열기</button><button id="history">${icon("history")}복구 지점</button><button id="backup">${icon("download")}현재 문서 백업</button><a href="https://github.com/boclair98/excel-workspace" target="_blank" rel="noopener">소스 코드 보기 ${icon("arrow-up-right")}</a><p>${icon("shield-check")}문서는 이 브라우저에 보관돼요.<br>중요한 파일은 내려받아 주세요.</p></div></aside>
 <main class="editor-area" id="editor-area" aria-label="스프레드시트 편집기"><div class="quickbar" role="toolbar" aria-label="간편 편집"><button id="undo" class="icon-btn" aria-label="실행 취소">${icon("undo-2")}</button><button id="redo" class="icon-btn" aria-label="다시 실행">${icon("redo-2")}</button><span class="separator"></span><button id="bold" class="icon-btn" aria-label="굵게">${icon("bold")}</button><button id="italic" class="icon-btn" aria-label="기울임">${icon("italic")}</button><label class="sr-only" for="font-size">글자 크기</label><select id="font-size"><option>10</option><option selected>11</option><option>12</option><option>14</option><option>16</option><option>20</option><option>24</option></select><label class="sr-only" for="number-format">표시 형식</label><select id="number-format"><option value="General">일반</option><option value="#,##0">숫자</option><option value="₩#,##0">원화</option><option value="0.0%">백분율</option><option value="yyyy-mm-dd">날짜</option></select><span class="separator"></span><button id="filter" title="선택한 범위에 필터 설정">${icon("filter")}필터</button><button id="sort" title="제목 행과 기준 열을 지정해 선택 범위 정렬">${icon("arrow-up-a-z")}정렬</button><button id="full-tools" aria-pressed="false">${icon("settings-2")}전체 도구</button></div>
 <form class="formula" id="cell-form"><label class="sr-only" for="address">셀 주소 또는 범위</label><input id="address" value="A1" spellcheck="false" aria-label="셀 주소 또는 범위"><span class="fx" aria-hidden="true">ƒx</span><label class="sr-only" for="cell-input">셀 내용 또는 수식</label><textarea id="cell-input" rows="1" placeholder="셀 내용 또는 =SUM(A1:A10)" autocomplete="off" aria-description="Enter로 입력, Alt+Enter 또는 Shift+Enter로 줄 바꿈"></textarea><button type="submit" class="icon-btn" aria-label="셀에 입력">${icon("check")}</button></form>
@@ -105,7 +123,6 @@ $("app").innerHTML = `
 <dialog id="modal" aria-labelledby="modal-title"><form method="dialog"><div class="dialog-heading"><h2 id="modal-title"></h2><button class="icon-btn" value="cancel" aria-label="대화상자 닫기">${icon("x")}</button></div><div id="modal-body"></div><div class="dialog-actions"><button value="cancel">취소</button><button id="modal-ok" class="primary" value="ok">확인</button></div></form></dialog>
 ${aiPanelMarkup(icon)}`;
 icons();
-$("ai-open").before($("export"));
 
 let editor: Editor,
   books: SavedBook[] = [],
@@ -549,9 +566,28 @@ function closeLibrary() {
   const d = $("library-dialog") as HTMLDialogElement;
   if (d.open) d.close();
 }
-$("library-dialog").addEventListener("close", () =>
-  document.querySelector(".workspace")!.prepend($("sidebar")),
-);
+const narrowView = matchMedia("(max-width: 800px)");
+function syncLibraryButton() {
+  const dialog = $<HTMLDialogElement>("library-dialog");
+  const trigger = $("library-toggle");
+  trigger.setAttribute(
+    "aria-controls",
+    narrowView.matches ? "library-dialog" : "sidebar",
+  );
+  const isOpen = narrowView.matches
+    ? dialog.open
+    : !document.body.classList.contains("sidebar-hidden");
+  trigger.setAttribute("aria-expanded", String(isOpen));
+}
+$("library-dialog").addEventListener("close", () => {
+  document.querySelector(".workspace")!.prepend($("sidebar"));
+  syncLibraryButton();
+});
+narrowView.addEventListener("change", () => {
+  if (!narrowView.matches) closeLibrary();
+  syncLibraryButton();
+});
+window.addEventListener("resize", syncLibraryButton);
 document
   .querySelectorAll<HTMLElement>("[data-close]")
   .forEach(
@@ -559,13 +595,14 @@ document
       (b.onclick = () => ($(b.dataset.close!) as HTMLDialogElement).close()),
   );
 bind("library-toggle", () => {
-  if (matchMedia("(max-width: 800px)").matches) {
+  if (narrowView.matches) {
     $("library-host").append($("sidebar"));
     ($("library-dialog") as HTMLDialogElement).showModal();
   } else {
     document.body.classList.toggle("sidebar-hidden");
     window.dispatchEvent(new Event("resize"));
   }
+  syncLibraryButton();
 });
 bind("new", async () => {
   await openBook(newBook());

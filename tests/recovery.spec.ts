@@ -4,6 +4,9 @@ async function ready(page: Page) {
   await expect(page.locator("#tab-0")).toBeVisible();
   await expect(page.locator("#loading")).toBeHidden();
   await expect(page.locator("#editor canvas:visible").first()).toBeVisible();
+  if (!(await page.locator("#sidebar").isVisible())) {
+    await page.locator("#library-toggle").click();
+  }
   await expect(page.locator("#history")).toBeVisible();
 }
 

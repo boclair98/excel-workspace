@@ -32,6 +32,23 @@ const button = (id: string, name: string, label: string, small = false) =>
   `<button id="${id}" ${small ? `class="icon-btn" aria-label="${label}" title="${label}"` : ""}>${i(name)}${small ? "" : label}</button>`;
 const group = (label: string, body: string) =>
   `<div class="ribbon-group"><div class="ribbon-controls">${body}</div><span class="ribbon-caption">${label}</span></div>`;
+
+const displayFields = [
+  { id: "accent", label: "강조색", hint: "리본과 버튼에 쓰는 색", choices: [
+    ["green", "워크북 그린"], ["blue", "클래식 블루"], ["slate", "차분한 슬레이트"],
+    ["violet", "잉크 바이올렛"], ["teal", "오션 틸"],
+  ] },
+  { id: "density", label: "도구 간격", hint: "PC 리본의 높이와 여백", choices: [
+    ["comfortable", "표준"], ["compact", "촘촘하게"],
+  ] },
+  { id: "layout", label: "PC 작업 영역", hint: "시트를 열었을 때의 배치", choices: [
+    ["wide", "전체 폭 시트"], ["library", "보관함과 시트"],
+  ] },
+  { id: "ai-width", label: "AI 작업 창", hint: "넓은 PC에서 요청과 결과를 보는 방식", choices: [
+    ["wide", "넓게 · 나란히 보기"], ["compact", "간결하게 · 위아래로 보기"],
+  ] },
+] as const;
+
 export function mountRibbon(options: Options) {
   const bar = document.querySelector(".quickbar")!;
   const old = (id: string) => document.getElementById(id)!.outerHTML;
@@ -46,7 +63,7 @@ export function mountRibbon(options: Options) {
   const ribbon = document.createElement("section");
   ribbon.className = "ribbon";
   ribbon.setAttribute("aria-label", "편집 도구");
-  ribbon.innerHTML = `<div class="ribbon-tabs" role="tablist" aria-label="리본 메뉴">${["홈", "삽입", "데이터", "보기"].map((s, k) => `<button role="tab" id="tab-${k}" aria-controls="panel-${k}" aria-selected="${k === 0}" tabindex="${k === 0 ? 0 : -1}">${s}</button>`).join("")}<span class="ribbon-note">익숙한 표, 더 가벼운 작업</span><button id="full-tools" class="icon-btn" aria-label="리본 접기" title="리본 접기" aria-pressed="false">${i("chevron-up")}</button></div>
+  ribbon.innerHTML = `<div class="ribbon-tabs"><div class="ribbon-tab-list" role="tablist" aria-label="리본 메뉴">${["홈", "삽입", "데이터", "보기"].map((s, k) => `<button role="tab" id="tab-${k}" aria-controls="panel-${k}" aria-selected="${k === 0}" tabindex="${k === 0 ? 0 : -1}">${s}</button>`).join("")}</div><div class="ribbon-view-actions"><button id="appearance" aria-label="화면 설정" title="화면 설정">${i("settings-2")}<span>화면 설정</span></button><button id="full-tools" class="icon-btn" aria-label="리본 접기" title="리본 접기" aria-pressed="false">${i("chevron-up")}</button></div></div>
   <div class="ribbon-panel" id="panel-0" role="tabpanel" aria-labelledby="tab-0">${group("실행 취소", undo + redo)}${group("글꼴", `<label class="sr-only" for="font-family">글꼴</label><select id="font-family"><option value="Noto Sans KR Variable">Noto Sans KR</option><option value="Arial">Arial</option><option value="Malgun Gothic">맑은 고딕</option><option value="Georgia">Georgia</option><option value="Courier New">Courier New</option></select><label class="sr-only" for="font-size">글자 크기</label>${fontSize}${bold}${italic}${button("underline", "underline", "밑줄", true)}<label class="color-picker" title="글자 색상">${i("type")}<input type="color" id="font-color" value="#191f28" aria-label="글자 색상"></label><label class="color-picker" title="셀 채우기">${i("paint-bucket")}<input type="color" id="fill-color" value="#eaf5ef" aria-label="셀 채우기 색상"></label>`)}${group("맞춤", button("align-left", "align-left", "왼쪽 정렬", true) + button("align-center", "align-center", "가운데 정렬", true) + button("align-right", "align-right", "오른쪽 정렬", true) + button("wrap", "wrap-text", "줄 바꿈", true) + button("merge", "merge", "병합", true) + button("border", "grid-2-x2", "모든 테두리", true))}${group("표시 형식", `<label class="sr-only" for="number-format">표시 형식</label>${format}`)}</div>
   <div class="ribbon-panel" id="panel-1" role="tabpanel" aria-labelledby="tab-1" hidden>${group("행과 열", button("insert-row", "rows-3", "행 삽입") + button("insert-column", "columns-3", "열 삽입"))}${group("통합문서", button("insert-sheet", "file-plus-2", "새 시트") + button("manage-sheets", "columns-3", "시트 관리") + button("duplicate-book", "file-plus-2", "문서 복제"))}${group("셀 크기", `<button id="row-height">행 높이</button><button id="column-width">열 너비</button>`)}${group("표 만들기", `<button id="template-budget">예시 가계부</button>`)}</div>
   <div class="ribbon-panel" id="panel-2" role="tabpanel" aria-labelledby="tab-2" hidden>${group("정렬 및 필터", sort + filter)}${group("찾기", button("find", "search", "찾기·바꾸기"))}${group("데이터 정리", button("trim-cells", "wrap-text", "앞뒤 공백 정리") + button("clear-cells", "eraser", "선택 내용 지우기"))}<p class="ribbon-tip">먼저 셀 범위를 선택하세요.<br>수식 입력줄 왼쪽에 A1:D10을 입력해도 돼요.</p></div>
@@ -311,41 +328,51 @@ export function mountRibbon(options: Options) {
     ),
   );
   bind("view-library", () => $("library-toggle").click());
-  const applyPreferences = (accent: string, density: string) => {
-    document.documentElement.dataset.accent = accent;
-    document.documentElement.dataset.density = density;
+  const display = {
+    accent: "green",
+    density: "comfortable",
+    layout: "wide",
+    "ai-width": "wide",
+  };
+  const displayKey = "excel-workspace-display";
+  const applyPreferences = () => {
+    const { dataset } = document.documentElement;
+    dataset.accent = display.accent;
+    dataset.density = display.density;
+    dataset.aiWidth = display["ai-width"];
+    document.body.classList.toggle("sidebar-hidden", display.layout === "wide");
+    window.dispatchEvent(new Event("resize"));
   };
   try {
-    const p = JSON.parse(
-      localStorage.getItem("excel-workspace-display") ?? "{}",
-    );
-    applyPreferences(p.accent ?? "green", p.density ?? "comfortable");
+    const saved = JSON.parse(localStorage.getItem(displayKey) ?? "{}");
+    for (const { id, choices } of displayFields) {
+      if (choices.some(([value]) => value === saved?.[id]))
+        display[id] = saved[id];
+    }
   } catch {
     /* Keep readable defaults. */
   }
-  bind("personalize", async () => {
-    if (
-      await options.modal(
-        "내 작업 공간 꾸미기",
-        `<p>문서 내용과 서식은 바뀌지 않습니다.</p><label for="accent">강조색</label><select id="accent"><option value="green">포레스트 그린</option><option value="blue">클래식 블루</option><option value="slate">차분한 슬레이트</option></select><label for="density">도구 간격</label><select id="density"><option value="comfortable">여유롭게</option><option value="compact">촘촘하게 (PC)</option></select>`,
-        "저장",
-      )
-    ) {
-      const accent = ($("accent") as HTMLSelectElement).value,
-        density = ($("density") as HTMLSelectElement).value;
-      applyPreferences(accent, density);
-      try {
-        localStorage.setItem(
-          "excel-workspace-display",
-          JSON.stringify({ accent, density }),
-        );
-      } catch {
-        options.toast(
-          "화면에 적용했지만 브라우저 설정은 보관하지 못했습니다.",
-          true,
-        );
-      }
-      window.dispatchEvent(new Event("resize"));
+  applyPreferences();
+  const personalize = async () => {
+    const fields = displayFields.map(({ id, label, hint, choices }) => {
+      const values = choices.map(([value, text]) =>
+        `<option value="${value}" ${display[id] === value ? "selected" : ""}>${text}</option>`,
+      ).join("");
+      return `<div class="display-field"><label for="${id}">${label}</label><span id="${id}-hint">${hint}</span><select id="${id}" aria-describedby="${id}-hint">${values}</select></div>`;
+    }).join("");
+    if (!(await options.modal(
+      "작업 공간 설정",
+      `<p class="display-intro">이 브라우저에서 사용할 편집 화면을 설정하세요.</p><div class="display-grid">${fields}</div>`,
+      "저장",
+    ))) return;
+    for (const { id } of displayFields) display[id] = $<HTMLSelectElement>(id).value;
+    applyPreferences();
+    try {
+      localStorage.setItem(displayKey, JSON.stringify(display));
+    } catch {
+      options.toast("브라우저에 화면 설정을 보관하지 못했습니다.", true);
     }
-  });
+  };
+  bind("personalize", personalize);
+  bind("appearance", personalize);
 }

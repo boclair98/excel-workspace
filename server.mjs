@@ -2,7 +2,13 @@ import http from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { aiProvider, askAI, openAIUserRef, validateRequest } from "./ai.mjs";
+import {
+  aiProvider,
+  askAI,
+  isSharedOpenAI,
+  openAIUserRef,
+  validateRequest,
+} from "./ai.mjs";
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript",
@@ -14,6 +20,13 @@ const mime = {
 export function createServer(config = process.env) {
   const root = resolve("dist"),
     limits = new Map();
+  const sharedOpenAI = isSharedOpenAI(config);
+  const configuredRate = Number(config.OPENAI_SHARED_RPM);
+  const sharedRate =
+    Number.isSafeInteger(configuredRate) && configuredRate > 0
+      ? configuredRate
+      : 30;
+  let sharedWindow = { count: 0, reset: 0 };
   const json = (res, status, body) => {
     if (res.writableEnded || res.destroyed) return;
     res.writeHead(status, {
@@ -41,7 +54,7 @@ export function createServer(config = process.env) {
             ? rawUser
             : undefined;
         if (["GET", "HEAD"].includes(req.method) && url.pathname === "/healthz")
-          return json(res, 200, { status: "ok", version: "0.4.0" });
+          return json(res, 200, { status: "ok", version: "0.5.0" });
         if (req.method === "GET" && url.pathname === "/api/status") {
           const provider = aiProvider(config, user);
           return json(res, 200, {
@@ -49,7 +62,8 @@ export function createServer(config = process.env) {
             provider,
             signedIn: Boolean(user),
             managed,
-            openAIUserRef: openAIUserRef(user),
+            sharedOpenAI,
+            openAIUserRef: sharedOpenAI ? null : openAIUserRef(user),
           });
         }
         if (url.pathname === "/api/ai" && req.method === "POST") {
@@ -118,6 +132,21 @@ export function createServer(config = process.env) {
                   ? "JSON 형식을 확인해 주세요."
                   : error.message,
             });
+          }
+          if (sharedOpenAI) {
+            const started = Date.now();
+            if (started >= sharedWindow.reset)
+              sharedWindow = { count: 0, reset: started + 60000 };
+            if (sharedWindow.count >= sharedRate) {
+              res.setHeader(
+                "Retry-After",
+                String(Math.ceil((sharedWindow.reset - started) / 1000)),
+              );
+              return json(res, 429, {
+                error: "현재 AI 요청이 많습니다. 잠시 후 다시 시도해 주세요.",
+              });
+            }
+            sharedWindow.count++;
           }
           const result = await askAI(input, user, config);
           return json(res, result.status, result.body);

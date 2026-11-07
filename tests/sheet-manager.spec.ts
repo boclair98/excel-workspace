@@ -56,6 +56,9 @@ async function backup(
   info: TestInfo,
   name: string,
 ): Promise<IWorkbookData> {
+  if (!(await page.locator("#sidebar").isVisible())) {
+    await page.locator("#library-toggle").click();
+  }
   const event = page.waitForEvent("download");
   await page.locator("#backup").click();
   const path = info.outputPath(name);

@@ -39,15 +39,26 @@ export function openAIUserRef(user) {
     : null;
 }
 
+export function isSharedOpenAI(config) {
+  return (
+    config.CODERS_NATIVE === "true" &&
+    config.OPENAI_SHARED === "true" &&
+    Boolean(config.OPENAI_API_KEY?.trim())
+  );
+}
+
 export function aiProvider(config, user) {
   const native = config.CODERS_NATIVE === "true";
   const local = [undefined, "", "127.0.0.1", "localhost", "::1"].includes(
     config.HOST,
   );
-  const owner = openAIUserRef(user);
+  const canUseNativeOpenAI =
+    user &&
+    (isSharedOpenAI(config) ||
+      openAIUserRef(user) === config.OPENAI_CODERS_USER_REF);
   if (
     config.OPENAI_API_KEY?.trim() &&
-    (native ? owner && owner === config.OPENAI_CODERS_USER_REF : local)
+    (native ? canUseNativeOpenAI : local)
   )
     return "openai";
   return config.ANTHROPIC_API_KEY && config.ANTHROPIC_BASE_URL
@@ -296,7 +307,7 @@ const editInstructions =
 
 function providerRequest(provider, config, user, { prompt, context, mode }) {
   const headers = {
-    "User-Agent": "Excel-Workspace/0.4.0",
+    "User-Agent": "Excel-Workspace/0.5.0",
     "Content-Type": "application/json",
   };
   const editing = mode === "edit";

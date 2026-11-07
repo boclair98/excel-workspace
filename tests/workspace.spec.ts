@@ -47,7 +47,7 @@ test('real example formulas, formatting, undo, download, browser save and reload
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto('/'); await ready(page);
-  await page.locator('#example').click();
+  await page.locator('#hint-example').click();
   await expect(page.locator('#document-name')).toHaveText('예시 가계부');
   await expect(page.locator('#save-state')).toHaveText('이 브라우저에 보관됨');
   await selectCell(page, 'F6');
@@ -82,6 +82,7 @@ test('real example formulas, formatting, undo, download, browser save and reload
   await page.reload(); await ready(page);
   await expect(page.locator('#document-name')).toHaveText('예시 가계부');
   await selectCell(page, 'G2'); await expect(page.locator('#cell-input')).toHaveValue('temporary');
+  await page.locator('#library-toggle').click();
   await page.locator('#search').fill('없는 문서'); await expect(page.locator('#library')).toContainText('검색 결과가 없어요');
   await page.locator('#search').fill('가계부'); await expect(page.locator('#library .book-open')).toHaveCount(1);
   await page.screenshot({ path: info.outputPath('desktop-editor.png') });
@@ -103,6 +104,7 @@ test('XLSX upload and multi-sheet content, CSV and JSON backup roundtrip', async
   expect(multi.worksheets).toHaveLength(3);
   expect(multi.getWorksheet('가져온 시트')!.getCell('D2').result).toBe(36000);
   expect(multi.worksheets.some(s => s.getCell('A1').value === '새 시트 입력')).toBe(true);
+  await page.locator('#library-toggle').click();
   const backup = await download(page, '#backup', info, 'backup.json');
   await page.locator('#new').click(); await expect(page.locator('#document-name')).toHaveText('새 통합문서');
   await importFile(page, backup);
@@ -266,7 +268,7 @@ test('AI rejects out-of-range changes and fits the reviewed changes at four size
 
 test('responsive editor and dialogs at 360, 390, 768 and 1440 pixels', async ({ page }, info) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/'); await ready(page); await page.locator('#example').click();
+  await page.goto('/'); await ready(page); await page.locator('#hint-example').click();
   await expect(page.locator('#document-name')).toHaveText('예시 가계부');
   for (const viewport of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
     await page.setViewportSize(viewport);
@@ -294,13 +296,26 @@ test('responsive editor and dialogs at 360, 390, 768 and 1440 pixels', async ({ 
 test('keyboard ribbon and personalization, honest disconnected AI without data transmission', async ({ page }, info) => {
   let aiRequests = 0; page.on('request', request => { if (new URL(request.url()).pathname === '/api/ai') aiRequests++; });
   await page.goto('/'); await ready(page);
+  await expect(page.locator('#sidebar')).toBeHidden();
+  const wideSheet = (await page.locator('.sheet-stage').boundingBox())!.width;
   await page.locator('#tab-0').focus(); await page.keyboard.press('ArrowRight');
   await expect(page.locator('#tab-1')).toBeFocused(); await expect(page.locator('#panel-1')).toBeVisible();
   await page.keyboard.press('ArrowLeft'); await expect(page.locator('#panel-0')).toBeVisible();
   await page.locator('#tab-3').click(); await page.locator('#personalize').click();
-  await page.locator('#accent').selectOption('blue'); await page.locator('#density').selectOption('compact'); await page.locator('#modal-ok').click();
+  await page.locator('#accent').selectOption('blue');
+  await page.locator('#density').selectOption('compact');
+  await page.locator('#layout').selectOption('library');
+  await page.locator('#ai-width').selectOption('compact');
+  await page.locator('#modal-ok').click();
   await expect(page.locator('html')).toHaveAttribute('data-accent', 'blue'); await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
   await page.reload(); await ready(page); await expect(page.locator('html')).toHaveAttribute('data-accent', 'blue');
+  await expect(page.locator('html')).toHaveAttribute('data-ai-width', 'compact');
+  await expect(page.locator('#sidebar')).toBeVisible();
+  expect((await page.locator('.sheet-stage').boundingBox())!.width).toBeLessThan(wideSheet);
+  await page.locator('#appearance').click();
+  await expect(page.locator('#layout')).toHaveValue('library');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#appearance')).toBeFocused();
   await page.locator('#ai-open').click(); await expect(page.locator('#ai-status')).toContainText('AI 연결 전');
   await expect(page.locator('#include-cells')).not.toBeChecked();
   await page.locator('#ai-prompt').fill('B2:B10 합계 수식을 만들어 줘'); await page.locator('#ai-send').click();

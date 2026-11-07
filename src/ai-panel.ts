@@ -8,21 +8,28 @@ import type { Editor } from "./editor";
 
 export function aiPanelMarkup(icon: (name: string) => string) {
   return `<dialog id="ai-dialog" class="ai-dialog" aria-labelledby="ai-title">
-    <div class="dialog-heading"><div><span class="eyebrow">SPREADSHEET ASSISTANT</span><h2 id="ai-title">${icon("sparkles")}AI 도우미</h2></div><button class="icon-btn" data-close="ai-dialog" aria-label="AI 도우미 닫기">${icon("x")}</button></div>
+    <div class="dialog-heading">
+      <span class="ai-mark">${icon("sparkles")}</span>
+      <div class="ai-heading-copy"><h2 id="ai-title">AI 도우미</h2><p>수식을 물어보거나 선택한 표를 바꾸세요.</p></div>
+      <button class="icon-btn" data-close="ai-dialog" aria-label="AI 도우미 닫기">${icon("x")}</button>
+    </div>
     <div class="ai-content">
-      <div class="ai-intro"><span class="ai-mark">${icon("sparkles")}</span><h3>표를 말로 바꿔 보세요.</h3><p>셀을 선택하고 원하는 작업을 적으세요.<br>변경 전후를 확인한 뒤 적용할 수 있어요.</p></div>
+      <div class="ai-composer">
       <div id="ai-status" class="notice" role="status">AI 연결 상태를 확인하고 있어요.</div>
       <details class="ai-owner" id="ai-owner" hidden><summary>개인 OpenAI 연결 코드</summary><p>내 Coders 계정에 개인 키를 연결할 때 쓰는 코드예요.</p><code id="ai-owner-code"></code><button id="ai-copy-code" type="button">코드 복사</button></details>
       <form id="ai-form">
         <fieldset class="ai-modes"><legend class="sr-only">AI 작업 선택</legend><label><input type="radio" name="ai-mode" value="question" checked>질문</label><label><input type="radio" name="ai-mode" value="edit">표 바꾸기</label></fieldset>
         <div class="suggestions"><button type="button" data-ai-mode="question" data-prompt="선택한 데이터의 합계를 구하는 수식을 만들어 줘">합계 수식 ${icon("plus")}</button><button type="button" data-ai-mode="question" data-prompt="선택 범위를 한국어로 요약해 줘">데이터 요약 ${icon("plus")}</button><button type="button" data-ai-mode="edit" data-prompt="빈칸을 0으로 채워 줘" hidden>빈칸 채우기 ${icon("plus")}</button><button type="button" data-ai-mode="edit" data-prompt="문자의 앞뒤 공백을 정리해 줘" hidden>공백 정리 ${icon("plus")}</button></div>
         <div id="ai-edit-scope" class="ai-edit-scope" hidden><strong id="ai-range-label"></strong><span>이 범위의 일반 값만 바꿔요.</span></div>
-        <label for="ai-prompt">무엇을 도와드릴까요?</label><textarea id="ai-prompt" maxlength="2000" rows="4" required></textarea>
+        <label for="ai-prompt">무엇을 도와드릴까요?</label><textarea id="ai-prompt" maxlength="2000" rows="3" required></textarea>
         <label class="checkbox"><input type="checkbox" id="include-cells">선택한 셀 내용도 전송 (최대 200셀)</label>
         <p class="privacy" id="ai-privacy">질문과 동의한 셀만 AI 제공자에게 전송됩니다.</p>
         <button id="ai-send" class="primary wide" type="submit">AI에게 질문하기</button>
       </form>
       <p id="ai-error" class="ai-error" role="alert" hidden></p>
+      </div>
+      <div class="ai-output">
+      <div class="ai-empty">${icon("table-2")}<h3>결과 미리보기</h3><p>AI 답변과 셀별 변경 전후를 여기서 확인할 수 있어요.</p></div>
       <section id="ai-result" class="ai-result" aria-labelledby="ai-result-label" hidden>
         <h3 id="ai-result-label" aria-live="polite" tabindex="-1">AI의 제안</h3>
         <p id="ai-explanation"></p>
@@ -33,6 +40,7 @@ export function aiPanelMarkup(icon: (name: string) => string) {
         <button id="ai-apply" class="primary wide" hidden>선택 셀에 수식 적용</button>
         <p class="privacy" id="ai-result-note">범위와 계산 결과를 확인해 주세요.</p>
       </section>
+      </div>
     </div>
   </dialog>`;
 }
@@ -48,6 +56,7 @@ type Status = {
   managed: boolean;
   signedIn: boolean;
   provider?: "openai" | "claude" | null;
+  sharedOpenAI?: boolean;
   openAIUserRef?: string | null;
 };
 type Preview =
@@ -132,7 +141,7 @@ export function mountAiPanel(options: Options) {
         : "AI에게 질문하기";
     send.disabled = Boolean(pending);
     const provider =
-      status?.provider === "openai"
+      status?.provider === "openai" || status?.sharedOpenAI
         ? "OpenAI"
         : status?.provider === "claude"
           ? "관리형 Claude"
@@ -153,7 +162,9 @@ export function mountAiPanel(options: Options) {
     } else {
       notice.textContent =
         status.provider === "openai"
-          ? "OpenAI 연결 설정됨"
+          ? status.sharedOpenAI
+            ? "OpenAI · 사이트 제공"
+            : "OpenAI 연결 설정됨"
           : "Coders 관리형 AI 연결 설정됨";
     }
     $("ai-owner").hidden = !status?.openAIUserRef;

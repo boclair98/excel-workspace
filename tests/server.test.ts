@@ -31,7 +31,7 @@ test('AI provider request forwards trusted identity, limits context and parses r
   let body: Record<string, unknown> = {}; let headers: Record<string, string> = {};
   const request = async (url: string, init: RequestInit) => { assert.equal(url, 'https://example.invalid/llm/v1/messages'); assert.equal(init.redirect, 'error'); body = JSON.parse(init.body as string); headers = init.headers as Record<string, string>; return new Response(JSON.stringify({ content: [{ type: 'text', text: '{"explanation":"합계 수식입니다.","formula":"=SUM(B2:B10)"}' }] }), { headers: { 'content-type': 'application/json' } }); };
   const result = await askAI({ prompt: 'B2:B10 합계', context: '' }, 'test-user', { ANTHROPIC_API_KEY: 'unit-test-placeholder', ANTHROPIC_BASE_URL: 'https://example.invalid/llm' }, request);
-  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.4.0'); assert.equal(body.max_tokens, 1200);
+  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.5.0'); assert.equal(body.max_tokens, 1200);
 });
 const editContext = JSON.stringify({
   sheet: '품목', range: 'B2:C3',
@@ -162,4 +162,52 @@ test('HTTP accepts bounded Korean payload and rejects oversized bodies', async (
     assert.equal((await fetch(origin + '/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: '한'.repeat(2000), context }) })).status, 503);
     assert.equal((await fetch(origin + '/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: 'a'.repeat(70000) }) })).status, 413);
   } finally { await new Promise<void>(resolve => server.close(resolve)); }
+});
+
+test('shared OpenAI serves separate authenticated users and applies the server-wide limit', async (t) => {
+  const request = fetch;
+  let providerCalls = 0;
+  t.mock.method(globalThis, 'fetch', async (url: string, options?: RequestInit) => {
+    if (url !== 'https://api.openai.com/v1/responses') return request(url, options);
+    providerCalls++;
+    assert.equal(new Headers(options?.headers).get('X-Coders-User'), null);
+    return Response.json({
+      output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(editAnswer) }] }],
+    });
+  });
+  const server = createServer({
+    ...openAIConfig,
+    CODERS_NATIVE: 'true',
+    OPENAI_SHARED: 'true',
+    OPENAI_SHARED_RPM: '2',
+    HOST: '0.0.0.0',
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const send = (user?: string) => fetch(origin + '/api/ai', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(user ? { 'X-Coders-User': user } : {}),
+    },
+    body: JSON.stringify(editInput),
+  });
+  try {
+    assert.equal((await send()).status, 401);
+    for (const user of ['viewer-one', 'viewer-two']) {
+      const status = await (await fetch(origin + '/api/status', { headers: { 'X-Coders-User': user } })).json();
+      assert.equal(status.provider, 'openai');
+      assert.equal(status.sharedOpenAI, true);
+      assert.equal(status.openAIUserRef, null);
+      const response = await send(user);
+      assert.equal(response.status, 200);
+      assert.deepEqual((await response.json()).edits, editAnswer.edits);
+    }
+    const limited = await send('viewer-three');
+    assert.equal(limited.status, 429);
+    assert.ok(Number(limited.headers.get('Retry-After')) > 0);
+    assert.equal(providerCalls, 2);
+  } finally {
+    await new Promise<void>(resolve => server.close(resolve));
+  }
 });
