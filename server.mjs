@@ -41,7 +41,7 @@ export function createServer(config = process.env) {
             ? rawUser
             : undefined;
         if (["GET", "HEAD"].includes(req.method) && url.pathname === "/healthz")
-          return json(res, 200, { status: "ok", version: "0.3.0" });
+          return json(res, 200, { status: "ok", version: "0.3.1" });
         if (req.method === "GET" && url.pathname === "/api/status")
           return json(res, 200, {
             aiAvailable: Boolean(

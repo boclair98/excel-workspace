@@ -92,3 +92,47 @@ test("sheet navigation, renaming, numeric summary and formula help work on deskt
   await expect(page.locator("#sheet-tabs button")).toHaveCount(2);
   expect(errors).toEqual([]);
 });
+
+test("the hosted support button leaves sheet controls accessible", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  await page.evaluate(() => {
+    if (document.querySelector("[data-coders-support]")) return;
+    const support = document.createElement("div");
+    support.setAttribute("data-coders-support", "");
+    Object.assign(support.style, {
+      position: "fixed",
+      bottom: "16px",
+      right: "16px",
+      width: "134px",
+      height: "46px",
+      zIndex: "100000",
+      background: "white",
+    });
+    support.textContent = "후원";
+    document.body.append(support);
+  });
+  for (const [width, height] of [
+    [360, 800],
+    [390, 844],
+    [768, 1024],
+    [1440, 900],
+  ]) {
+    await page.setViewportSize({ width, height });
+    if (width === 1440)
+      await page.locator("html").evaluate((root) => {
+        root.dataset.density = "compact";
+      });
+    const support = await page.locator("[data-coders-support]").boundingBox();
+    const navigation = await page.locator(".sheetbar").boundingBox();
+    expect(support).not.toBeNull();
+    expect(navigation).not.toBeNull();
+    expect(navigation!.y + navigation!.height).toBeLessThanOrEqual(support!.y);
+    await page.locator("#sheet-manage").click();
+    await expect(page.locator("#sheet-manager-dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#sheet-manage")).toBeFocused();
+  }
+});

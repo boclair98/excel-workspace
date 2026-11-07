@@ -6,7 +6,15 @@
   --primary: #18794e;
   --border: #e5e9e7;
   --muted: #6b7684;
+  --host-footer-space: 0px;
   font-size: 14px;
+}
+/* Coders injects a fixed support control at the bottom of the hosted page. */
+:root:has([data-coders-support]) {
+  --host-footer-space: calc(
+    56px +
+      max(env(safe-area-inset-bottom, 0px), var(--coders-widget-bottom, 16px))
+  );
 }
 * {
   box-sizing: border-box;
@@ -203,7 +211,7 @@ p {
 }
 .workspace {
   display: flex;
-  height: calc(100dvh - 130px);
+  height: calc(100dvh - 130px - var(--host-footer-space));
   min-height: 350px;
 }
 .sidebar {
@@ -880,7 +888,7 @@ pre {
     display: none;
   }
   .workspace {
-    height: calc(100dvh - 158px);
+    height: calc(100dvh - 158px - var(--host-footer-space));
     min-height: 320px;
   }
   button,
@@ -1159,7 +1167,7 @@ pre {
     height: 62px;
   }
   [data-density="compact"] .workspace {
-    height: calc(100dvh - 120px);
+    height: calc(100dvh - 120px - var(--host-footer-space));
   }
 }
 @media (max-width: 800px) {
@@ -1920,7 +1928,7 @@ dialog.history-dialog {
 
 /* Keep navigation and dialog headings reachable while feedback is visible. */
 .toast {
-  bottom: calc(104px + env(safe-area-inset-bottom));
+  bottom: calc(104px + env(safe-area-inset-bottom) + var(--host-footer-space));
 }
 .data-tools-dialog .dialog-heading {
   position: sticky;

@@ -6,13 +6,13 @@ Microsoft Excel의 공식 제품이나 제휴 서비스가 아닙니다. 개인 
 
 | 배포 정보 | 상태 |
 |---|---|
-| 버전 | `0.3.0` |
-| 운영 예정 주소 | https://excel-workspace.coders.kr |
-| Coders 배포 | 소유자 배포 인증 갱신 대기 — 운영 배포 시작 전 |
+| 소스 버전 | `0.3.1` |
+| 운영 주소 | https://excel-workspace.coders.kr |
+| Coders 배포 | 운영 중 · [공개 헬스 확인](https://excel-workspace.coders.kr/healthz) |
 | canonical 저장소 | https://github.com/boclair98/excel-workspace |
 | 조직 fork | https://github.com/coders-kr/excel-workspace — `boclair98/excel-workspace`의 실제 GitHub fork |
 
-v0.3은 시트 관리, 최대 3개 열 기준 정렬, XLSX 탭 색상과 시트 숨김 상태 보존을 추가했습니다. 로컬 빌드, 단위 테스트 42개, Chrome 브라우저 시나리오 15개를 통과했습니다. Coders의 기존 인증이 HTTP 401을 반환해 운영 배포는 소유자 인증 갱신을 기다리고 있습니다. [검증 기록](VERIFICATION.md)
+v0.3은 시트 관리, 최대 3개 열 기준 정렬, XLSX 탭 색상과 시트 숨김 상태 보존을 추가했습니다. v0.3.1은 Coders 후원 버튼용 하단 여백을 확보해 시트 관리와 배율을 가리지 않도록 합니다. 운영 주소에서 편집·보관과 XLSX·CSV·JSON 파일 왕복을 확인했습니다. [검증 기록](VERIFICATION.md)
 
 ![실제 데스크톱 엑셀 편집 화면](screenshots/editor-desktop.png)
 
@@ -285,12 +285,13 @@ gh api repos/coders-kr/excel-workspace/commits/main --jq .sha
 | v0.1 | 통과 | 18개 통과 | 4개 통과 | 360×800, 390×844, 768×1024, 1440×900 |
 | v0.2 | 통과 | 31개 통과 | 10개 통과 | 편집기·복구·찾기 |
 | v0.3 | 통과 | 42개 통과 | 15개 통과 | 같은 4개 크기에서 편집기·시트 관리·정렬 |
+| v0.3.1 | 통과 | 42개 통과 | 시트 탐색·후원 버튼 회귀 2개 통과 | 같은 4개 크기에서 후원 버튼과 시트 도구 분리 |
 
 v0.3 검증에는 시트 관리와 실행 취소, 정렬 후 수식·행 연결 유지, XLSX 탭 색상·숨김 왕복, 기존 편집·파일·복구 흐름을 포함합니다. 화면은 키보드 포커스, 가로 넘침, 모바일 조작 크기와 콘솔 오류를 확인했습니다. [검증 상세](VERIFICATION.md)
 
-- [ ] 실제 플랫폼에서 컨테이너 빌드와 기동, `/healthz` 버전 확인
-- [ ] Coders 배포 상태 `ready`와 운영 URL 확인
-- [ ] 운영 편집·보관·다운로드·반응형 화면과 로그인 후 실제 AI 응답 확인
+- [x] Coders 빌드·기동, 배포 상태 `ready`, 공개 `/healthz`의 `ok` 응답
+- [x] 운영 편집·보관·다운로드 및 XLSX·CSV·JSON 재열기
+- [ ] Coders 로그인 후 실제 관리형 AI 응답 확인
 
 
 ## 기여와 라이선스
