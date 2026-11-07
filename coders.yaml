@@ -8,6 +8,7 @@ services:
     expose: public
     env:
       CODERS_NATIVE: "true"
+      PUBLIC_ORIGIN: "https://excel-workspace.coders.kr"
       OPENAI_SHARED: "true"
       ANTHROPIC_BASE_URL: ${ai.url}
       ANTHROPIC_API_KEY: ${ai.token}

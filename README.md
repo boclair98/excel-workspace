@@ -6,7 +6,7 @@ Microsoft Excel과 별도로 개발한 앱입니다. 개인 OpenAI 키를 연결
 
 | 배포 정보 | 상태 |
 |---|---|
-| 소스 버전 | `0.5.0` |
+| 소스 버전 | `0.5.1` |
 | 운영 주소 | https://excel-workspace.coders.kr |
 | Coders 배포 | 운영 중 · [공개 헬스 확인](https://excel-workspace.coders.kr/healthz) |
 | canonical 저장소 | https://github.com/boclair98/excel-workspace |
@@ -234,6 +234,7 @@ npm run build
 | `OPENAI_API_KEY` | 개인 OpenAI 프로젝트 키 | 개인 OpenAI 사용 시 | [OpenAI API 키 관리](https://platform.openai.com/api-keys)에서 발급. 로컬 `.env.local` 또는 Coders 서버 비밀 변수 |
 | `OPENAI_MODEL` | OpenAI Responses 모델, 기본 `gpt-5.4-mini` | 아니요 | 서버 환경 변수 |
 | `OPENAI_SHARED` | Coders 로그인 방문자에게 운영자 OpenAI 연결 제공 | 공유 모드 사용 시 | `coders.yaml`에서 `true` |
+| `PUBLIC_ORIGIN` | AI 요청을 허용할 브라우저의 공개 주소 | 프록시가 내부 주소로 전달할 때 | `coders.yaml`의 운영 주소 |
 | `OPENAI_SHARED_RPM` | 공유 OpenAI의 서버 인스턴스당 분당 요청 상한 | 아니요 | 서버 환경 변수, 기본 30 |
 | `OPENAI_CODERS_USER_REF` | 한 계정에 연결할 때 사용하는 앱별 코드 | 공유 모드를 끄고 한 계정으로 연결할 때 | 운영 앱 로그인 → AI 도우미 → 개인 OpenAI 연결 코드 |
 

@@ -307,7 +307,7 @@ const editInstructions =
 
 function providerRequest(provider, config, user, { prompt, context, mode }) {
   const headers = {
-    "User-Agent": "Excel-Workspace/0.5.0",
+    "User-Agent": "Excel-Workspace/0.5.1",
     "Content-Type": "application/json",
   };
   const editing = mode === "edit";

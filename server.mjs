@@ -21,6 +21,7 @@ export function createServer(config = process.env) {
   const root = resolve("dist"),
     limits = new Map();
   const sharedOpenAI = isSharedOpenAI(config);
+  const publicOrigin = config.PUBLIC_ORIGIN?.trim();
   const configuredRate = Number(config.OPENAI_SHARED_RPM);
   const sharedRate =
     Number.isSafeInteger(configuredRate) && configuredRate > 0
@@ -54,7 +55,7 @@ export function createServer(config = process.env) {
             ? rawUser
             : undefined;
         if (["GET", "HEAD"].includes(req.method) && url.pathname === "/healthz")
-          return json(res, 200, { status: "ok", version: "0.5.0" });
+          return json(res, 200, { status: "ok", version: "0.5.1" });
         if (req.method === "GET" && url.pathname === "/api/status") {
           const provider = aiProvider(config, user);
           return json(res, 200, {
@@ -68,7 +69,7 @@ export function createServer(config = process.env) {
         }
         if (url.pathname === "/api/ai" && req.method === "POST") {
           const origins = managed
-            ? [`https://${req.headers.host}`]
+            ? [publicOrigin || `https://${req.headers.host}`]
             : [
                 "http://127.0.0.1:7730",
                 "http://localhost:7730",
