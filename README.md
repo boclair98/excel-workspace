@@ -8,7 +8,7 @@ Microsoft Excel과 별도로 개발한 앱입니다. 한국어 AI 채팅에서 �
 |---|---|
 | 소스 버전 | `0.8.0` |
 | 운영 주소 | https://excel-workspace.coders.kr |
-| Coders 배포 | 운영 중 · [공개 헬스 확인](https://excel-workspace.coders.kr/healthz) |
+| Coders 배포 | v0.7 운영 유지 · v0.8 배포는 플랫폼 CPU 부족으로 실패 (`release_failed`) · [검증 기록](VERIFICATION.md) |
 | canonical 저장소 | https://github.com/boclair98/excel-workspace |
 | 조직 fork | https://github.com/coders-kr/excel-workspace — `boclair98/excel-workspace`의 실제 GitHub fork |
 
