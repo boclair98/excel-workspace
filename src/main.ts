@@ -28,6 +28,7 @@ import {
   Settings2,
   History,
   Pencil,
+  Layers,
 } from "lucide";
 import { newBook, validateBook, LIMITS, cellText } from "./model";
 import {
@@ -84,6 +85,7 @@ function icons() {
       Settings2,
       History,
       Pencil,
+      Layers,
     },
     attrs: { "stroke-width": 1.7 },
   });
@@ -92,10 +94,10 @@ $("app").innerHTML = `
 <header class="topbar"><div class="brand">${icon("table-2")}<h1>오픈소스 엑셀</h1><span class="beta">BETA</span></div><div class="document-heading"><button id="rename" title="통합문서 이름 변경"><span id="document-name">새 통합문서</span>${icon("chevron-down")}</button><span id="save-state" role="status">이 브라우저에 자동 보관</span></div><button class="icon-btn" id="help" aria-label="이용 안내">${icon("help-circle")}</button></header>
 <nav class="filebar" aria-label="파일 도구"><div class="file-actions"><button id="library-toggle" class="icon-btn" aria-label="내 통합문서 열기">${icon("panel-left")}</button><span class="separator"></span><button id="new">${icon("plus")}새 문서</button><button id="open">${icon("folder-open")}열기</button><button id="save">${icon("save")}보관</button><button id="export" class="primary">${icon("download")}XLSX 저장</button><button id="csv" class="small-action">CSV</button></div><button id="ai-open" class="ai-trigger">${icon("sparkles")}<span>AI 도우미</span></button></nav>
 <div class="workspace"><aside id="sidebar" class="sidebar" aria-label="내 통합문서"><div class="side-top"><h2>내 통합문서</h2><span id="book-count">0</span></div><label class="search">${icon("search")}<input id="search" type="search" placeholder="이름으로 찾기" aria-label="보관한 통합문서 검색"></label><div class="library" id="library"></div><div class="side-bottom"><button id="example">${icon("file-spreadsheet")}예시 가계부 열기</button><button id="history">${icon("history")}복구 지점</button><button id="backup">${icon("download")}현재 문서 백업</button><a href="https://github.com/boclair98/excel-workspace" target="_blank" rel="noopener">소스 코드 보기 ${icon("arrow-up-right")}</a><p>${icon("shield-check")}문서는 이 브라우저에 보관돼요.<br>중요한 파일은 내려받아 주세요.</p></div></aside>
-<main class="editor-area" id="editor-area" aria-label="스프레드시트 편집기"><div class="quickbar" role="toolbar" aria-label="간편 편집"><button id="undo" class="icon-btn" aria-label="실행 취소">${icon("undo-2")}</button><button id="redo" class="icon-btn" aria-label="다시 실행">${icon("redo-2")}</button><span class="separator"></span><button id="bold" class="icon-btn" aria-label="굵게">${icon("bold")}</button><button id="italic" class="icon-btn" aria-label="기울임">${icon("italic")}</button><label class="sr-only" for="font-size">글자 크기</label><select id="font-size"><option>10</option><option selected>11</option><option>12</option><option>14</option><option>16</option><option>20</option><option>24</option></select><label class="sr-only" for="number-format">표시 형식</label><select id="number-format"><option value="General">일반</option><option value="#,##0">숫자</option><option value="₩#,##0">원화</option><option value="0.0%">백분율</option><option value="yyyy-mm-dd">날짜</option></select><span class="separator"></span><button id="filter" title="선택한 범위에 필터 설정">${icon("filter")}필터</button><button id="sort" title="선택한 범위를 첫 열 기준으로 오름차순 정렬">${icon("arrow-up-a-z")}정렬</button><button id="full-tools" aria-pressed="false">${icon("settings-2")}전체 도구</button></div>
+<main class="editor-area" id="editor-area" aria-label="스프레드시트 편집기"><div class="quickbar" role="toolbar" aria-label="간편 편집"><button id="undo" class="icon-btn" aria-label="실행 취소">${icon("undo-2")}</button><button id="redo" class="icon-btn" aria-label="다시 실행">${icon("redo-2")}</button><span class="separator"></span><button id="bold" class="icon-btn" aria-label="굵게">${icon("bold")}</button><button id="italic" class="icon-btn" aria-label="기울임">${icon("italic")}</button><label class="sr-only" for="font-size">글자 크기</label><select id="font-size"><option>10</option><option selected>11</option><option>12</option><option>14</option><option>16</option><option>20</option><option>24</option></select><label class="sr-only" for="number-format">표시 형식</label><select id="number-format"><option value="General">일반</option><option value="#,##0">숫자</option><option value="₩#,##0">원화</option><option value="0.0%">백분율</option><option value="yyyy-mm-dd">날짜</option></select><span class="separator"></span><button id="filter" title="선택한 범위에 필터 설정">${icon("filter")}필터</button><button id="sort" title="제목 행과 기준 열을 지정해 선택 범위 정렬">${icon("arrow-up-a-z")}정렬</button><button id="full-tools" aria-pressed="false">${icon("settings-2")}전체 도구</button></div>
 <form class="formula" id="cell-form"><label class="sr-only" for="address">셀 주소 또는 범위</label><input id="address" value="A1" spellcheck="false" aria-label="셀 주소 또는 범위"><span class="fx" aria-hidden="true">ƒx</span><label class="sr-only" for="cell-input">셀 내용 또는 수식</label><textarea id="cell-input" rows="1" placeholder="셀 내용 또는 =SUM(A1:A10)" autocomplete="off" aria-description="Enter로 입력, Alt+Enter 또는 Shift+Enter로 줄 바꿈"></textarea><button type="submit" class="icon-btn" aria-label="셀에 입력">${icon("check")}</button></form>
 <output id="formula-help" class="formula-help" hidden></output><div id="save-conflict" class="save-conflict" role="alert" hidden><div><strong>다른 탭에서 이 문서가 변경됐어요.</strong><span>내 변경을 사본으로 보관하거나 최신 보관본을 열어 주세요.</span></div><div class="conflict-actions"><button id="conflict-copy" class="primary">내 변경 사본 보관</button><button id="conflict-reload">최신 보관본 열기</button></div></div><div class="sheet-stage"><div id="editor"></div><div id="loading" class="loading" role="status"><span class="spinner"></span><strong>통합문서를 준비하고 있어요</strong><span>표와 수식을 불러오는 중입니다.</span></div><div class="start-hint" id="start-hint"><strong>빈 셀에서 시작하세요.</strong><span>더블 클릭해 입력하거나, 엑셀 파일을 열어 이어서 작업하세요.</span><button id="hint-example">예시 가계부로 둘러보기 →</button><button id="hint-close" class="icon-btn" aria-label="시작 안내 닫기">${icon("x")}</button></div></div>
-<nav class="sheetbar" aria-label="시트 탐색"><div id="sheet-tabs" class="sheet-tabs" role="tablist" aria-label="통합문서 시트"></div><label class="sr-only" for="sheet-picker">현재 시트</label><select id="sheet-picker" aria-label="현재 시트"></select><button id="sheet-add" class="icon-btn" aria-label="시트 추가" title="시트 추가">${icon("plus")}</button><button id="sheet-rename" class="icon-btn" aria-label="시트 이름 변경" title="시트 이름 변경">${icon("pencil")}</button><label class="sr-only" for="sheet-zoom">시트 확대 배율</label><select id="sheet-zoom" aria-label="시트 확대 배율"><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></nav><footer class="statusbar"><span id="selection-status">A1 선택</span><span>Univer 기반 · 파일은 기기에 저장</span></footer></main></div>
+<nav class="sheetbar" aria-label="시트 탐색"><div id="sheet-tabs" class="sheet-tabs" role="tablist" aria-label="통합문서 시트"></div><label class="sr-only" for="sheet-picker">현재 시트</label><select id="sheet-picker" aria-label="현재 시트"></select><button id="sheet-add" class="icon-btn" aria-label="시트 추가" title="시트 추가">${icon("plus")}</button><button id="sheet-rename" class="icon-btn" aria-label="시트 이름 변경" title="시트 이름 변경">${icon("pencil")}</button><button id="sheet-manage" class="icon-btn" aria-label="시트 관리" title="시트 관리">${icon("layers")}</button><label class="sr-only" for="sheet-zoom">시트 확대 배율</label><select id="sheet-zoom" aria-label="시트 확대 배율"><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></nav><footer class="statusbar"><span id="selection-status">A1 선택</span><span>Univer 기반 · 파일은 기기에 저장</span></footer></main></div>
 <div id="toast" role="status" class="toast" hidden></div>
 <input type="file" id="file" accept=".xlsx,.csv,.json" hidden>
 <dialog id="library-dialog" class="library-dialog" aria-label="내 통합문서"><button class="dialog-close icon-btn" data-close="library-dialog" aria-label="보관함 닫기">${icon("x")}</button><div id="library-host"></div></dialog>
@@ -236,14 +238,22 @@ function updateSheets() {
   const sheets = current.getSheets().filter((sheet) => !sheet.isSheetHidden());
   const signature =
     JSON.stringify(
-      sheets.map((sheet) => [sheet.getSheetId(), sheet.getSheetName()]),
+      sheets.map((sheet) => [
+        sheet.getSheetId(),
+        sheet.getSheetName(),
+        sheet.getTabColor(),
+      ]),
     ) + active.getSheetId();
   if (signature !== sheetSignature) {
     sheetSignature = signature;
     $("sheet-tabs").innerHTML = sheets
       .map((sheet) => {
         const selected = sheet.getSheetId() === active.getSheetId();
-        return `<button role="tab" data-sheet="${esc(sheet.getSheetId())}" aria-selected="${selected}" tabindex="${selected ? 0 : -1}">${esc(sheet.getSheetName())}</button>`;
+        const rawColor = sheet.getTabColor() ?? "";
+        const color = /^#[\da-f]{6}$/i.test(rawColor)
+          ? rawColor
+          : "transparent";
+        return `<button role="tab" aria-controls="editor" data-sheet="${esc(sheet.getSheetId())}" aria-selected="${selected}" tabindex="${selected ? 0 : -1}" style="--sheet-color:${color}">${esc(sheet.getSheetName())}</button>`;
       })
       .join("");
     $("sheet-picker").innerHTML = sheets
@@ -317,6 +327,17 @@ $("sheet-picker").addEventListener(
   run(() => activateSheet(($("sheet-picker") as HTMLSelectElement).value)),
 );
 bind("sheet-add", addSheet);
+bind("sheet-manage", async () => {
+  const target = editor;
+  const { openSheetManager } = await import("./sheet-manager");
+  if (target !== editor || loading || document.querySelector("dialog[open]"))
+    return;
+  openSheetManager(target, updateAfterEdit, onSelection);
+});
+document.addEventListener(
+  "manage-sheets",
+  run(() => $("sheet-manage").click()),
+);
 bind("sheet-rename", async () => {
   const sheet = editor.current().getActiveSheet();
   if (
@@ -740,20 +761,16 @@ bind("filter", () => {
   }
   onChange();
 });
+function updateAfterEdit() {
+  onChange();
+  onSelection();
+}
 bind("sort", async () => {
-  const r = editor.range();
-  if (r.getRange().endRow === r.getRange().startRow)
-    throw new Error("정렬할 데이터 범위를 선택해 주세요.");
-  if (
-    await modal(
-      "선택 범위 정렬",
-      `<p>${esc(r.getA1Notation())}의 첫 열을 기준으로 오름차순 정렬합니다. 제목 행은 선택에서 제외해 주세요.</p>`,
-      "정렬",
-    )
-  ) {
-    r.sort({ column: 0, ascending: true });
-    onChange();
-  }
+  const target = editor;
+  const { openSortTools } = await import("./sort-tools");
+  if (target !== editor || loading || document.querySelector("dialog[open]"))
+    return;
+  openSortTools(target, updateAfterEdit, toast);
 });
 $("address").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {

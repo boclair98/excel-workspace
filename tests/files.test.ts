@@ -30,6 +30,24 @@ test('invalid CSV and oversized workbook are rejected', () => {
 });
 test('corrupt XLSX is rejected', async () => { await assert.rejects(importXlsx(new TextEncoder().encode('bad zip').buffer, 'bad.xlsx')); });
 
+test('worksheet order, RGB tab colors and both hidden states survive XLSX roundtrip', async () => {
+  const original = new ExcelJS.Workbook();
+  original.addWorksheet('표지', { properties: { tabColor: { argb: 'FF18794E' } } }).getCell('A1').value = '공개';
+  const hidden = original.addWorksheet('내부 계산'); hidden.state = 'hidden'; hidden.getCell('A1').value = 25;
+  const veryHidden = original.addWorksheet('보조 값'); veryHidden.state = 'veryHidden'; veryHidden.properties.tabColor = { argb: 'FF2563EB' }; veryHidden.getCell('A1').value = '자료';
+  const input = Uint8Array.from(await original.xlsx.writeBuffer() as unknown as Uint8Array).buffer;
+  const imported = await importXlsx(input, '시트 구성.xlsx');
+  assert.deepEqual(imported.sheetOrder.map(id => imported.sheets[id].hidden), [0, 1, 2]);
+  assert.equal(imported.sheets[imported.sheetOrder[0]].tabColor, '#18794E');
+  const output = new ExcelJS.Workbook(); await output.xlsx.load(await exportXlsx(imported));
+  assert.deepEqual(output.worksheets.map(sheet => sheet.name), ['표지', '내부 계산', '보조 값']);
+  assert.deepEqual(output.worksheets.map(sheet => sheet.state), ['visible', 'hidden', 'veryHidden']);
+  assert.equal(output.worksheets[2].properties.tabColor.argb, 'FF2563EB');
+  assert.equal(output.worksheets[1].getCell('A1').value, 25);
+  const invalid = structuredClone(imported); invalid.sheets[invalid.sheetOrder[0]].hidden = 1;
+  assert.throws(() => validateBook(invalid), /보이는 시트/);
+});
+
 test('1904 workbook dates, string formula results, borders and empty-row formatting survive normalized export', async () => {
   const original = new ExcelJS.Workbook(); original.properties.date1904 = true;
   const ws = original.addWorksheet('날짜 확인');

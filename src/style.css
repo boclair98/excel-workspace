@@ -1954,3 +1954,520 @@ dialog.history-dialog {
     padding: 16px;
   }
 }
+
+/* Sheet colors supplement names and selected-state borders. */
+.sheet-tabs button::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--sheet-color, transparent);
+}
+
+/* Sheet manager: native dialog, 44px controls and a compact worksheet index. */
+.sheet-manager-dialog {
+  width: min(900px, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(88svh, 820px);
+  padding: 0;
+  overflow-y: auto;
+  color: #191f28;
+}
+.sheet-manager-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 20px 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+.sheet-manager-heading h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+.sheet-manager-eyebrow {
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 600;
+}
+.sheet-manager-dialog button,
+.sheet-manager-dialog input {
+  min-height: 44px;
+}
+.sheet-manager-dialog button:disabled {
+  cursor: not-allowed;
+}
+.sheet-manager-dialog .icon-btn {
+  width: 44px;
+  font-size: 26px;
+  font-weight: 400;
+}
+.sheet-manager-body {
+  padding: 20px 24px 24px;
+}
+.sheet-manager-body p {
+  margin: 0 0 18px;
+  line-height: 1.65;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+#sheet-manager-description {
+  color: #56625b;
+}
+.sheet-manager-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.4fr);
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.sheet-manager-index,
+.sheet-manager-detail {
+  min-width: 0;
+}
+.sheet-manager-list-heading,
+.sheet-manager-selected-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.sheet-manager-list-heading h3,
+.sheet-manager-selected-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+#sheet-manager-count,
+#sheet-manager-state {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+#sheet-manager-list {
+  max-height: 350px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f7f9f8;
+}
+.sheet-manager-item {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+  min-width: 0;
+  white-space: normal;
+}
+.sheet-manager-item strong {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.sheet-manager-item[aria-pressed="true"] {
+  background: #e3f2e8;
+  color: #104d34;
+  box-shadow: inset 0 0 0 1px #badcc8;
+}
+.sheet-manager-swatch {
+  width: 5px;
+  height: 26px;
+  flex: 0 0 5px;
+  border-radius: 3px;
+}
+.sheet-manager-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #64746a;
+}
+.sheet-manager-detail {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+#sheet-manager-rename-form label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.sheet-manager-name-row {
+  display: flex;
+  gap: 8px;
+}
+.sheet-manager-name-row input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+.sheet-manager-name-row button,
+.sheet-manager-order button,
+.sheet-manager-actions > button:not(.primary) {
+  background: #f4f7f5;
+  border: 1px solid var(--border);
+}
+.sheet-manager-colors {
+  border: 0;
+  padding: 0;
+  margin: 20px 0;
+  min-width: 0;
+}
+.sheet-manager-colors legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+#sheet-manager-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.sheet-manager-color {
+  min-width: 44px;
+  padding: 8px;
+  border: 1px solid transparent;
+}
+.sheet-manager-color > span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+.sheet-manager-color[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: #eaf5ef;
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.sheet-manager-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.sheet-manager-order > div {
+  display: flex;
+  gap: 8px;
+}
+.sheet-manager-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px 0 12px;
+}
+.sheet-manager-danger {
+  color: #b42318;
+}
+.sheet-manager-body p.sheet-manager-note {
+  color: #68766e;
+  font-size: 12px;
+  margin: 0;
+}
+.sheet-manager-error {
+  color: #a72621;
+  background: #fff2f0;
+  border: 1px solid #f5c4be;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.sheet-manager-status {
+  color: var(--primary);
+  background: #edf6f1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.sheet-manager-dialog .toast {
+  position: static;
+  transform: none;
+  width: auto;
+  margin: 0 16px 16px;
+}
+.sheet-manager-confirm {
+  padding: 18px;
+  margin-bottom: 20px;
+  border: 1px solid #e9cba5;
+  background: #fff9ef;
+  border-radius: 12px;
+}
+.sheet-manager-confirm h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.sheet-manager-confirm > div {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+@media (max-width: 640px) {
+  .sheet-manager-dialog {
+    width: calc(100vw - 24px);
+    max-height: 90svh;
+  }
+  .sheet-manager-heading {
+    padding: 16px;
+  }
+  .sheet-manager-body {
+    padding: 16px;
+  }
+  .sheet-manager-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  #sheet-manager-list {
+    max-height: 180px;
+  }
+  .sheet-manager-detail {
+    padding: 14px;
+  }
+  .sheet-manager-name-row {
+    flex-wrap: wrap;
+  }
+  .sheet-manager-name-row input {
+    flex-basis: 100%;
+    font-size: 16px;
+  }
+  .sheet-manager-name-row button {
+    width: 100%;
+  }
+}
+
+/* Sort configuration dialog. */
+.sort-tools-dialog {
+  width: 640px;
+  max-width: calc(100vw - 24px);
+  padding: 24px;
+  scroll-padding-block: 105px 76px;
+}
+.sort-tools-dialog .dialog-heading {
+  position: sticky;
+  top: -24px;
+  z-index: 2;
+  background: white;
+  margin: -24px -24px 20px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.sort-tools-dialog .dialog-heading > div {
+  min-width: 0;
+}
+.sort-tools-dialog .dialog-heading .icon-btn,
+.sort-tools-dialog .sort-remove {
+  width: 44px;
+  min-height: 44px;
+}
+.sort-caption {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.sort-range-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #f3f7f4;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 13px;
+}
+.sort-range-card > span {
+  color: var(--muted);
+}
+.sort-range-card > strong {
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+.sort-range-card > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  min-height: 32px;
+}
+.sort-range-card input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary);
+}
+.sort-description {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #4e5968;
+  margin: 18px 0;
+}
+.sort-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sort-criterion {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 125px 44px;
+  gap: 10px;
+  align-items: end;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sort-priority {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: #eaf5ef;
+  border-radius: 50%;
+  font-size: 12px;
+  color: var(--primary);
+}
+.sort-criterion label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  color: #4e5968;
+  min-width: 0;
+}
+.sort-criterion select {
+  width: 100%;
+  min-height: 44px;
+  font-size: 13px;
+  color: #191f28;
+}
+.sort-remove {
+  min-height: 44px;
+}
+.sort-add {
+  margin-top: 12px;
+  color: var(--primary);
+  min-height: 44px;
+}
+.sort-summary {
+  margin-top: 20px;
+  border-radius: 10px;
+  background: #f7f9f8;
+  padding: 16px;
+}
+.sort-summary h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.sort-summary p,
+.sort-summary li {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #4e5968;
+  overflow-wrap: anywhere;
+}
+.sort-summary ol {
+  padding-left: 20px;
+  margin: 10px 0 0;
+}
+.sort-warning {
+  margin-top: 18px;
+  font-size: 12px;
+  color: #6b5a38;
+  background: #fffbf0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  line-height: 1.8;
+}
+.sort-warning strong {
+  font-weight: 600;
+}
+.sort-error {
+  font-size: 13px;
+  color: #b42318;
+  background: #fff3f1;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+  line-height: 1.8;
+}
+.sort-tools-dialog .dialog-actions > button {
+  min-height: 44px;
+}
+.sort-tools-dialog .dialog-actions {
+  position: sticky;
+  bottom: -24px;
+  z-index: 2;
+  margin: 18px -24px -24px;
+  padding: 12px 24px 16px;
+  background: #fff;
+  border-top: 1px solid var(--border);
+}
+.sort-tools-dialog button:disabled {
+  cursor: not-allowed;
+}
+@media (max-width: 600px) {
+  .sort-tools-dialog {
+    padding: 20px 16px;
+  }
+  .sort-tools-dialog .dialog-heading {
+    top: -20px;
+    margin: -20px -16px 18px;
+    padding: 16px;
+  }
+  .sort-range-card {
+    gap: 8px;
+    padding: 12px;
+  }
+  .sort-range-card > label {
+    margin-left: 0;
+    flex-basis: 100%;
+    min-height: 44px;
+  }
+  .sort-criterion {
+    grid-template-columns: 24px minmax(0, 1fr) 44px;
+    gap: 8px;
+  }
+  .sort-criterion > label:first-of-type {
+    grid-column: 2;
+  }
+  .sort-criterion > label:nth-of-type(2) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .sort-criterion > .sort-remove {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .sort-priority {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .sort-criterion select {
+    font-size: 16px;
+  }
+  .sort-description,
+  .sort-warning {
+    font-size: 13px;
+  }
+  .sort-tools-dialog .dialog-actions > button {
+    flex: 1;
+  }
+  .sort-tools-dialog .dialog-actions {
+    bottom: -20px;
+    margin: 18px -16px -20px;
+    padding-inline: 16px;
+  }
+}

@@ -170,6 +170,7 @@ export async function askAI(
       method: "POST",
       redirect: "error",
       headers: {
+        "User-Agent": "Excel-Workspace/0.3.0",
         "Content-Type": "application/json",
         "x-api-key": config.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",

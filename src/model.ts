@@ -153,6 +153,8 @@ export function validateBook(value: unknown): asserts value is IWorkbookData {
     )
       throw new Error("시트 이름은 중복 없이 1~31자로 지정해 주세요.");
     sheetNames.add(s.name.toLowerCase());
+    if (s.hidden != null && !integer(s.hidden, 0, 2))
+      throw new Error("시트 숨김 상태가 올바르지 않습니다.");
     if (
       !integer(s.rowCount, 1, LIMITS.rows) ||
       !integer(s.columnCount, 1, LIMITS.cols)
@@ -238,6 +240,8 @@ export function validateBook(value: unknown): asserts value is IWorkbookData {
       }
     }
   }
+  if (!b.sheetOrder.some((id) => !b.sheets[id].hidden))
+    throw new Error("통합문서에는 보이는 시트가 하나 이상 필요합니다.");
 }
 export function cellText(
   cell: ICellData | null | undefined,

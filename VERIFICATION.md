@@ -1,6 +1,25 @@
-# 검증 기록 — 2026-11-06
+# 검증 기록
 
-## v0.1 로컬 검증 완료
+## v0.3 로컬 검증 — 2026-11-07
+
+Windows, Node.js 22.17.1, Chrome headless에서 `http://127.0.0.1:7733`으로 최종 빌드를 실행했다. 로컬 `/healthz`는 HTTP 200과 버전 `0.3.0`을 반환했다.
+
+- `npm run build` 통과. 빌드에 TypeScript 검사가 포함된다. 시트 관리와 정렬은 열 때 불러오며 메인 JS 파일은 575.91 kB다.
+- `npm test` 42개 통과. 시트 이름·복제 한도·마지막 표시 시트 보호, 정렬 기준과 범위 보호, XLSX/CSV, IndexedDB, 복구 및 AI/HTTP 경계를 확인했다.
+- Chrome 브라우저 시나리오 15개 통과, 7.2분. 시트 관리 2개, 정렬 3개와 기존 흐름 10개를 실행했다.
+- `npm audit --omit=dev --audit-level=moderate`에서 취약점 0개. 공개 전 staged 26개 파일과 기존 Git 이력을 검사해 비밀값 패턴을 발견하지 않았다.
+
+시트의 이름을 바꾼 뒤 다른 시트의 수식 참조가 갱신되는 것을 확인했다. 복제·순서·색상·숨김·표시를 조작하고, 삭제 뒤 생긴 `#REF!`를 실행 취소로 복구했다. 마지막 표시 시트는 삭제하거나 숨길 수 없었다. XLSX를 독립 파싱해 RGB 탭 색상과 `visible`·`hidden`·`veryHidden` 상태가 왕복하는 것도 확인했다.
+
+B열에서 시작하는 범위에서 제목 행을 유지하며 세 가지 기준으로 정렬했다. 결과 XLSX에서 정렬 순서, 범위 밖의 셀, 행별 수식과 계산값을 확인했고 한 번의 실행 취소로 원래 순서를 복구했다. 제목 없는 범위 정렬과 병합·단일 행의 적용 거부도 브라우저에서 확인했다. 숨김 행·배열 수식·내용 변경은 정렬 범위 검사로 보호한다.
+
+360×800, 390×844, 768×1024, 1440×900에서 편집기·시트 관리·정렬을 촬영했다. PC와 모바일 화면을 직접 검토하고 페이지·대화상자 가로 넘침, 44px 조작, 정렬 버튼 가시성, Shift+Tab·Escape와 포커스 복귀를 확인했다. 화면 검토에서 페이지 오류와 실패 요청은 없었다. [PC 화면](screenshots/editor-desktop.png) · [모바일 화면](screenshots/editor-mobile.png) · [시트 관리](screenshots/sheet-manager.png) · [모바일 정렬](screenshots/sort-mobile.png)
+
+배포 계약은 현재 [Coders 에이전트 안내](https://coders.kr/llms.txt), [관리형 AI 안내](https://coders.kr/managed-ai.txt), [플랫폼 계약](https://github.com/coders-kr/template-coders/blob/main/PLATFORM.md)에 맞춰 검토했다. 공개 포트 8080, `PORT`, 서버 전용 관리형 토큰, native 방문자 식별 전달을 대조했다. 로컬 Docker CLI가 없어 실제 Alpine 이미지 빌드와 기동은 미검증이다.
+
+기존 Coders 인증이 HTTP 401을 반환했다. 운영 주소에서 빈 서브도메인 안내를 확인했으며 배포 요청과 운영 검증은 소유자 인증 갱신 대기 상태다. 개인 API 키를 등록하지 않았으며 실제 관리형 AI 응답은 운영 연결 후 확인해야 한다.
+
+## v0.1 로컬 검증 완료 — 2026-11-06
 
 환경: Windows, Node.js 22.17.1, npm 10.9.2, 실제 Chrome headless, http://127.0.0.1:7730의 production build.
 

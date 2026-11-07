@@ -225,6 +225,10 @@ export async function importXlsx(
     book.sheets[id] = {
       id,
       name: ws.name,
+      tabColor: /^#[\da-f]{6}$/i.test(rgb(ws.properties.tabColor) ?? "")
+        ? rgb(ws.properties.tabColor)!
+        : "",
+      hidden: ws.state === "veryHidden" ? 2 : ws.state === "hidden" ? 1 : 0,
       rowCount: Math.max(200, ws.rowCount + 20),
       columnCount: Math.max(26, ws.columnCount + 2),
       defaultRowHeight: 30,
@@ -297,6 +301,16 @@ export async function exportXlsx(book: IWorkbookData): Promise<ArrayBuffer> {
   for (const id of book.sheetOrder) {
     const sheet = book.sheets[id],
       ws = x.addWorksheet(sheet.name ?? "시트");
+    ws.state =
+      sheet.hidden === 2
+        ? "veryHidden"
+        : sheet.hidden === 1
+          ? "hidden"
+          : "visible";
+    if (/^#[\da-f]{6}$/i.test(sheet.tabColor ?? ""))
+      ws.properties.tabColor = {
+        argb: "FF" + sheet.tabColor!.slice(1).toUpperCase(),
+      };
     for (const [r, row] of Object.entries(sheet.cellData ?? {}))
       for (const [c, data] of Object.entries(
         row as Record<string, ICellData>,
