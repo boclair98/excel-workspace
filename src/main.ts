@@ -870,7 +870,7 @@ bind("help", async () => {
     "확인",
   );
 });
-mountAiPanel({ editor: () => loading ? undefined : editor, changed: updateAfterEdit, toast });
+const aiPanel = mountAiPanel({ editor: () => loading ? undefined : editor, changed: updateAfterEdit, toast });
 window.addEventListener("beforeunload", (e) => {
   if (dirty) {
     e.preventDefault();
@@ -908,5 +908,6 @@ async function boot() {
     fail(e);
     if (!editor) await openBook(newBook(), false);
   }
+  if (editor) aiPanel.openInitial();
 }
 void boot();

@@ -376,3 +376,34 @@ test('docked AI keeps sheet usable and text cursor stable while applying a table
   await page.locator('#ai-open').click(); await expect(prompt).toBeFocused();
   await expect(page.locator('#ai-send')).toBeEnabled();
 });
+
+
+test('side chat opens alongside the sheet, resizes and remembers closed preference', async ({ page }, info) => {
+  await page.goto('/'); await ready(page);
+  const chat = page.locator('#ai-dialog');
+  const separator = page.getByRole('separator', {name: 'AI 채팅 너비 조절'});
+  await expect(chat).toBeVisible();
+  await expect(page.locator('#ai-prompt')).not.toBeFocused();
+  const sheet = (await page.locator('.sheet-stage').boundingBox())!;
+  const panel = (await chat.boundingBox())!;
+  expect(sheet.x + sheet.width).toBeLessThan(panel.x);
+  await separator.focus(); await separator.press('Home');
+  expect((await chat.boundingBox())!.width).toBe(320);
+  await separator.press('ArrowLeft');
+  expect((await chat.boundingBox())!.width).toBe(330);
+  const handle = (await separator.boundingBox())!;
+  await page.mouse.move(handle.x + 4, handle.y + 80); await page.mouse.down();
+  await page.mouse.move(1012, handle.y + 80); await page.mouse.up();
+  expect((await chat.boundingBox())!.width).toBe(420);
+  await page.reload(); await ready(page); await expect(chat).toBeVisible();
+  expect((await chat.boundingBox())!.width).toBe(420);
+  await page.screenshot({path: info.outputPath('split-desktop.png')});
+  await page.getByRole('button', {name:'AI 채팅 닫기'}).click();
+  await expect(chat).toBeHidden();
+  expect((await page.locator('.sheet-stage').boundingBox())!.width).toBe(1440);
+  await page.reload(); await ready(page); await expect(chat).toBeHidden();
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#ai-open').click(); await expect(chat).toBeVisible();
+  await expect(separator).toBeHidden();
+  await expect(page.locator('#ai-send')).toBeInViewport({ratio:1});
+});

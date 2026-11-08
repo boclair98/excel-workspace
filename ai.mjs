@@ -313,7 +313,7 @@ const sheetChatInstructions =
 
 function providerRequest(provider, config, user, { prompt, context, mode, history }) {
   const headers = {
-    "User-Agent": "Excel-Workspace/0.8.0",
+    "User-Agent": "Excel-Workspace/0.9.0",
     "Content-Type": "application/json",
   };
   const chatting = mode === "chat";

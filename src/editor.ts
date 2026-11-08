@@ -75,7 +75,7 @@ export function createEditor(
   const syncInputFocus = () => {
     const target = document.activeElement;
     const external = target instanceof HTMLElement && !container.contains(target) &&
-      Boolean(target.closest('input,textarea,select,[contenteditable="true"],#ai-dialog'));
+      Boolean(target.closest('input,textarea,select,[contenteditable="true"],#ai-dialog,#ai-resize'));
     if (external) shortcuts.disableShortcut();
     else shortcuts.enableShortcut();
   };

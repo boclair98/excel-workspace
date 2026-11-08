@@ -823,8 +823,8 @@ dialog h2 {
   align-items: flex-start;
   justify-content: center;
   gap: 2px;
-  min-height: 78px;
-  padding: 11px 12px;
+  min-height: 56px;
+  padding: 8px 10px;
   border: 1px solid var(--accent-border);
   border-radius: 12px;
   background: var(--accent-surface);
@@ -836,11 +836,11 @@ dialog h2 {
 }
 .ai-template-buttons strong {
   color: var(--primary);
-  font-size: 17px;
+  font-size: 14px;
 }
 .ai-template-buttons span {
   color: #43564c;
-  font-size: 14px;
+  font-size: 12px;
 }
 .ai-template {
   min-width: 0;
@@ -2833,4 +2833,45 @@ dialog.history-dialog {
 @media (min-width: 801px) and (pointer: coarse) {
   .sheetbar button, .sheetbar select { min-height: 44px; }
   .sheetbar .icon-btn { width: 44px; }
+}
+
+
+/* Independent AI side panel, sharing the viewport with the spreadsheet. */
+.ai-resize { display: none; }
+@media (min-width: 1000px) {
+  html.ai-panel-open #app { padding-right: calc(var(--ai-panel-width) + 16px); }
+  .ai-dialog, [data-ai-width="wide"] .ai-dialog {
+    inset: 8px 8px 8px auto;
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+    border: 1px solid #d8dfdb;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px #172b2110;
+  }
+  .ai-dialog .dialog-heading { background: #f7f9f8; }
+  .ai-resize:not([hidden]) {
+    display: block;
+    position: fixed;
+    top: 8px;
+    bottom: 8px;
+    right: calc(var(--ai-panel-width) + 8px);
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 101;
+  }
+  .ai-resize::after {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: calc(50% - 20px);
+    width: 3px;
+    height: 40px;
+    border-radius: 3px;
+    background: #a7b8ae;
+  }
+  .ai-resize:is(:hover,:focus-visible)::after { background: var(--primary); }
+  :root.ai-panel-open:has([data-coders-support]) [data-coders-support] {
+    right: calc(var(--ai-panel-width) + 24px) !important;
+  }
 }

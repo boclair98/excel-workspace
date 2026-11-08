@@ -48,8 +48,8 @@ export function aiPanelMarkup(icon: (name: string) => string) {
           <button type="button" id="ai-copy-code">코드 복사</button>
         </details>
         <section id="ai-starters" class="ai-starters" aria-labelledby="ai-starters-title">
-          <h3 id="ai-starters-title">엑셀에서 무엇을 할까요?</h3>
-          <p>“신청자 명단을 만들어줘”라고 입력하면 시트에 바로 작성합니다. 실행 취소로 되돌릴 수 있어요.</p>
+          <h3 id="ai-starters-title">엑셀에 바로 작성하세요</h3>
+          <p>표 만들기, 계산, 내용 정리를 요청하세요. 결과는 시트에 바로 반영됩니다.</p>
           <div class="ai-template-buttons">
             <button type="button" data-template="notice"><strong>안내문</strong><span>일정, 공지, 알림</span></button>
             <button type="button" data-template="application"><strong>신청서</strong><span>교육, 행사, 이용 신청</span></button>
@@ -73,14 +73,14 @@ export function aiPanelMarkup(icon: (name: string) => string) {
         <div class="ai-composer-row">
           <div id="ai-message-entry" class="ai-message-entry">
             <label class="sr-only" for="ai-prompt">메시지</label>
-            <textarea id="ai-prompt" rows="2" maxlength="2000" aria-describedby="ai-privacy" placeholder="메시지를 적어 주세요."></textarea>
+            <textarea id="ai-prompt" rows="2" maxlength="2000" aria-describedby="ai-privacy" placeholder="예: 품목과 수량으로 표를 만들어줘"></textarea>
           </div>
           <button id="ai-send" class="primary" type="submit" disabled>보내기</button>
         </div>
         <p id="ai-privacy" class="ai-privacy">보낸 글과 최근 대화가 AI에 전달됩니다.</p>
       </div>
     </form>
-  </dialog>`;
+  </dialog><div id="ai-resize" class="ai-resize" role="separator" aria-label="AI 채팅 너비 조절" aria-orientation="vertical" aria-controls="ai-dialog" aria-valuemin="320" aria-valuemax="560" aria-valuenow="360" tabindex="0" hidden title="드래그 또는 방향키로 너비 조절 · 더블 클릭으로 초기화"></div>`;
 }
 
 type Status = {
@@ -126,6 +126,56 @@ export function mountAiPanel(options: Options) {
   let status: Status | undefined;
   let pending: AbortController | undefined;
   let opening = 0;
+  const resize = $("ai-resize");
+  const desktop = matchMedia("(min-width: 1000px)");
+  const stored = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
+  const persist = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* Optional display preference. */ } };
+  const widthKey = "excel-workspace-ai-width";
+  let preferredWidth = Number(stored(widthKey)) || 0;
+  let temporaryClose = false;
+  const maxWidth = () => Math.max(320, Math.min(560, innerWidth - 640));
+  function syncWidth() {
+    if (preferredWidth) document.documentElement.style.setProperty("--ai-panel-width", `${Math.min(maxWidth(), Math.max(320, preferredWidth))}px`);
+    resize.setAttribute("aria-valuemax", String(maxWidth()));
+    resize.setAttribute("aria-valuenow", String(Math.round(dialog.getBoundingClientRect().width || 360)));
+  }
+  function setWidth(width: number) {
+    preferredWidth = Math.min(maxWidth(), Math.max(320, width));
+    persist(widthKey, String(preferredWidth));
+    syncWidth();
+    window.dispatchEvent(new Event("resize"));
+  }
+  function resetWidth() {
+    preferredWidth = 0;
+    persist(widthKey, "0");
+    document.documentElement.style.removeProperty("--ai-panel-width");
+    window.dispatchEvent(new Event("resize"));
+  }
+  resize.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    resize.focus();
+    resize.setPointerCapture(event.pointerId);
+  });
+  resize.addEventListener("pointermove", (event) => {
+    if (resize.hasPointerCapture(event.pointerId)) setWidth(innerWidth - event.clientX - 8);
+  });
+  resize.addEventListener("pointerup", (event) => {
+    if (resize.hasPointerCapture(event.pointerId)) resize.releasePointerCapture(event.pointerId);
+  });
+  resize.addEventListener("keydown", (event) => {
+    const width = dialog.getBoundingClientRect().width;
+    const next = { ArrowLeft: width + 10, ArrowRight: width - 10, Home: 320, End: maxWidth() }[event.key];
+    if (next == null) return;
+    event.preventDefault(); event.stopPropagation(); setWidth(next);
+  });
+  resize.addEventListener("dblclick", resetWidth);
+  document.addEventListener("ai-panel-width-reset", resetWidth);
+  window.addEventListener("resize", syncWidth);
+  desktop.addEventListener("change", () => {
+    if (!desktop.matches && dialog.open) { temporaryClose = true; dialog.close(); }
+  });
+  syncWidth();
 
   function showError(message: string) {
     feedback.textContent = message;
@@ -160,7 +210,7 @@ export function mountAiPanel(options: Options) {
     link.disabled = busy;
     $("ai-progress").textContent = busy ? "AI가 답변을 작성하고 있어요." : "";
     $("ai-message-entry").hidden = Boolean(selected);
-    $("ai-starters").hidden = Boolean(selected);
+    $("ai-starters").hidden = Boolean(selected) || history.length > 0;
     $("ai-template").hidden = !selected;
     reset.hidden = !history.length;
     reset.disabled = cancel.disabled = busy;
@@ -301,8 +351,9 @@ export function mountAiPanel(options: Options) {
     updateComposer();
   }
 
-  $("ai-open").addEventListener("click", async () => {
-    if (dialog.open) { prompt.focus(); return; }
+  async function openPanel(focus = true) {
+    if (dialog.open) { if (focus) prompt.focus(); return; }
+    const previous = document.activeElement as HTMLElement | null;
     const id = ++opening;
     status = undefined;
     $("ai-owner").hidden = true;
@@ -310,8 +361,15 @@ export function mountAiPanel(options: Options) {
     updateComposer();
     dialog.show();
     document.documentElement.classList.add("ai-panel-open");
+    resize.hidden = false;
+    $("ai-open").setAttribute("aria-expanded", "true");
     window.dispatchEvent(new Event("resize"));
-    if (!selected) prompt.focus();
+    if (focus && !selected) prompt.focus();
+    else if (!focus) {
+      const target = previous && previous !== document.body ? previous : $("editor");
+      if (target.id === "editor") target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+    }
     try {
       const response = await fetch("/api/status", {
         cache: "no-store",
@@ -326,6 +384,12 @@ export function mountAiPanel(options: Options) {
     } catch {
       if (dialog.open && id === opening) showStatus();
     }
+  }
+  $("ai-open").setAttribute("aria-controls", "ai-dialog");
+  $("ai-open").setAttribute("aria-expanded", "false");
+  $("ai-open").addEventListener("click", () => {
+    persist("excel-workspace-ai-open", "true");
+    void openPanel();
   });
 
   dialog.addEventListener("close", () => {
@@ -333,6 +397,10 @@ export function mountAiPanel(options: Options) {
     pending = undefined;
     updateComposer();
     document.documentElement.classList.remove("ai-panel-open");
+    resize.hidden = true;
+    $("ai-open").setAttribute("aria-expanded", "false");
+    if (!temporaryClose) persist("excel-workspace-ai-open", "false");
+    temporaryClose = false;
     window.dispatchEvent(new Event("resize"));
     $("ai-open").focus();
   });
@@ -472,4 +540,9 @@ export function mountAiPanel(options: Options) {
       }
     }
   });
+  return {
+    openInitial() {
+      if (desktop.matches && stored("excel-workspace-ai-open") !== "false") void openPanel(false);
+    },
+  };
 }

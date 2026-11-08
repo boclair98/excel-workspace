@@ -365,8 +365,10 @@ export function mountRibbon(options: Options) {
       `<p class="display-intro">이 브라우저에서 사용할 편집 화면을 설정하세요.</p><div class="display-grid">${fields}</div>`,
       "저장",
     ))) return;
+    const resetAiWidth = display["ai-width"] !== $<HTMLSelectElement>("ai-width").value;
     for (const { id } of displayFields) display[id] = $<HTMLSelectElement>(id).value;
     applyPreferences();
+    if (resetAiWidth) document.dispatchEvent(new Event("ai-panel-width-reset"));
     try {
       localStorage.setItem(displayKey, JSON.stringify(display));
     } catch {
