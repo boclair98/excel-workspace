@@ -19,6 +19,7 @@ import {
   Grid2X2,
   ChevronUp,
   ChevronDown,
+  Maximize,
 } from "lucide";
 import type { Editor } from "./editor";
 type Options = {
@@ -63,7 +64,7 @@ export function mountRibbon(options: Options) {
   const ribbon = document.createElement("section");
   ribbon.className = "ribbon";
   ribbon.setAttribute("aria-label", "편집 도구");
-  ribbon.innerHTML = `<div class="ribbon-tabs"><div class="ribbon-tab-list" role="tablist" aria-label="리본 메뉴">${["홈", "삽입", "데이터", "보기"].map((s, k) => `<button role="tab" id="tab-${k}" aria-controls="panel-${k}" aria-selected="${k === 0}" tabindex="${k === 0 ? 0 : -1}">${s}</button>`).join("")}</div><div class="ribbon-view-actions"><button id="appearance" aria-label="화면 설정" title="화면 설정">${i("settings-2")}<span>화면 설정</span></button><button id="full-tools" class="icon-btn" aria-label="리본 접기" title="리본 접기" aria-pressed="false">${i("chevron-up")}</button></div></div>
+  ribbon.innerHTML = `<div class="ribbon-tabs"><div class="ribbon-tab-list" role="tablist" aria-label="리본 메뉴">${["홈", "삽입", "데이터", "보기"].map((s, k) => `<button role="tab" id="tab-${k}" aria-controls="panel-${k}" aria-selected="${k === 0}" tabindex="${k === 0 ? 0 : -1}">${s}</button>`).join("")}</div><div class="ribbon-view-actions"><button id="workspace-fullscreen" aria-pressed="false">${i("maximize")}<span>전체 화면</span></button><button id="appearance" aria-label="화면 설정" title="화면 설정">${i("settings-2")}<span>화면 설정</span></button><button id="full-tools" class="icon-btn" aria-label="리본 접기" title="리본 접기" aria-pressed="false">${i("chevron-up")}</button></div></div>
   <div class="ribbon-panel" id="panel-0" role="tabpanel" aria-labelledby="tab-0">${group("실행 취소", undo + redo)}${group("글꼴", `<label class="sr-only" for="font-family">글꼴</label><select id="font-family"><option value="Noto Sans KR Variable">Noto Sans KR</option><option value="Arial">Arial</option><option value="Malgun Gothic">맑은 고딕</option><option value="Georgia">Georgia</option><option value="Courier New">Courier New</option></select><label class="sr-only" for="font-size">글자 크기</label>${fontSize}${bold}${italic}${button("underline", "underline", "밑줄", true)}<label class="color-picker" title="글자 색상">${i("type")}<input type="color" id="font-color" value="#191f28" aria-label="글자 색상"></label><label class="color-picker" title="셀 채우기">${i("paint-bucket")}<input type="color" id="fill-color" value="#eaf5ef" aria-label="셀 채우기 색상"></label>`)}${group("맞춤", button("align-left", "align-left", "왼쪽 정렬", true) + button("align-center", "align-center", "가운데 정렬", true) + button("align-right", "align-right", "오른쪽 정렬", true) + button("wrap", "wrap-text", "줄 바꿈", true) + button("merge", "merge", "병합", true) + button("border", "grid-2-x2", "모든 테두리", true))}${group("표시 형식", `<label class="sr-only" for="number-format">표시 형식</label>${format}`)}</div>
   <div class="ribbon-panel" id="panel-1" role="tabpanel" aria-labelledby="tab-1" hidden>${group("행과 열", button("insert-row", "rows-3", "행 삽입") + button("insert-column", "columns-3", "열 삽입"))}${group("통합문서", button("insert-sheet", "file-plus-2", "새 시트") + button("manage-sheets", "columns-3", "시트 관리") + button("duplicate-book", "file-plus-2", "문서 복제"))}${group("셀 크기", `<button id="row-height">행 높이</button><button id="column-width">열 너비</button>`)}${group("표 만들기", `<button id="template-budget">예시 가계부</button>`)}</div>
   <div class="ribbon-panel" id="panel-2" role="tabpanel" aria-labelledby="tab-2" hidden>${group("정렬 및 필터", sort + filter)}${group("찾기", button("find", "search", "찾기·바꾸기"))}${group("데이터 정리", button("trim-cells", "wrap-text", "앞뒤 공백 정리") + button("clear-cells", "eraser", "선택 내용 지우기"))}<p class="ribbon-tip">먼저 셀 범위를 선택하세요.<br>수식 입력줄 왼쪽에 A1:D10을 입력해도 돼요.</p></div>
@@ -90,6 +91,7 @@ export function mountRibbon(options: Options) {
       Grid2X2,
       ChevronUp,
       ChevronDown,
+      Maximize,
     },
     attrs: { "stroke-width": 1.7 },
   });
@@ -107,6 +109,18 @@ export function mountRibbon(options: Options) {
   };
   const bind = (id: string, fn: () => unknown) =>
     $(id).addEventListener("click", run(fn));
+  const fullscreen = $<HTMLButtonElement>("workspace-fullscreen");
+  fullscreen.hidden = !document.fullscreenEnabled;
+  bind("workspace-fullscreen", async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  });
+  document.addEventListener("fullscreenchange", () => {
+    const active = Boolean(document.fullscreenElement);
+    fullscreen.setAttribute("aria-pressed", String(active));
+    fullscreen.querySelector("span")!.textContent = active ? "전체 화면 종료" : "전체 화면";
+    window.dispatchEvent(new Event("resize"));
+  });
   const edit = (fn: (editor: Editor) => void) => () => {
     fn(options.editor());
     options.changed();

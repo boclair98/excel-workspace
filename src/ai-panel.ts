@@ -80,7 +80,7 @@ export function aiPanelMarkup(icon: (name: string) => string) {
         <p id="ai-privacy" class="ai-privacy">보낸 글과 최근 대화가 AI에 전달됩니다.</p>
       </div>
     </form>
-  </dialog><div id="ai-resize" class="ai-resize" role="separator" aria-label="AI 채팅 너비 조절" aria-orientation="vertical" aria-controls="ai-dialog" aria-valuemin="320" aria-valuemax="560" aria-valuenow="360" tabindex="0" hidden title="드래그 또는 방향키로 너비 조절 · 더블 클릭으로 초기화"></div>`;
+  </dialog><div id="ai-resize" class="ai-resize" role="separator" aria-label="AI 채팅 너비 조절" aria-orientation="vertical" aria-controls="ai-dialog" aria-valuemin="320" aria-valuemax="560" aria-valuenow="320" tabindex="0" hidden title="드래그 또는 방향키로 너비 조절 · 더블 클릭으로 초기화"></div>`;
 }
 
 type Status = {
@@ -104,6 +104,12 @@ function recentHistory(history: Message[]) {
     start -= 2;
   }
   return history.slice(start);
+}
+
+function responseError(status: number) {
+  if (status === 429) return "AI 사용 한도에 도달했어요. 잠시 후 다시 보내 주세요.";
+  if (status === 504) return "AI 응답 시간이 초과됐어요. 잠시 후 다시 보내 주세요.";
+  return `AI 서버 응답을 확인할 수 없어요${status >= 400 ? ` (HTTP ${status})` : ""}. 잠시 후 다시 보내 주세요.`;
 }
 
 export function mountAiPanel(options: Options) {
@@ -133,11 +139,11 @@ export function mountAiPanel(options: Options) {
   const widthKey = "excel-workspace-ai-width";
   let preferredWidth = Number(stored(widthKey)) || 0;
   let temporaryClose = false;
-  const maxWidth = () => Math.max(320, Math.min(560, innerWidth - 640));
+  const maxWidth = () => Math.max(320, Math.min(560, innerWidth - 656));
   function syncWidth() {
     if (preferredWidth) document.documentElement.style.setProperty("--ai-panel-width", `${Math.min(maxWidth(), Math.max(320, preferredWidth))}px`);
     resize.setAttribute("aria-valuemax", String(maxWidth()));
-    resize.setAttribute("aria-valuenow", String(Math.round(dialog.getBoundingClientRect().width || 360)));
+    resize.setAttribute("aria-valuenow", String(Math.round(dialog.getBoundingClientRect().width || 320)));
   }
   function setWidth(width: number) {
     preferredWidth = Math.min(maxWidth(), Math.max(320, width));
@@ -192,14 +198,17 @@ export function mountAiPanel(options: Options) {
     const editor = options.editor();
     if (!link.checked || !editor) return;
     try {
-      const range = selected ? editor.range() : resolveAIRange(editor, prompt.value);
+      const { startRow, startColumn } = editor.range().getRange();
+      const range = selected
+        ? editor.current().getActiveSheet().getRange(startRow, startColumn)
+        : resolveAIRange(editor, prompt.value);
       $("ai-range").textContent = `작업 범위 ${range.getA1Notation()}`;
       $("ai-privacy").textContent = selected
         ? `입력한 내용과 최근 대화가 ${provider}에 전달되며, 초안은 선택한 첫 셀에 작성됩니다.`
         : `보낼 때 이 범위의 셀과 최근 대화가 ${provider}에 전달됩니다.`;
       return { editor, range };
-    } catch {
-      $("ai-range").textContent = "표에 적용하려면 200셀 안에서 범위를 적어 주세요.";
+    } catch (error) {
+      $("ai-range").textContent = error instanceof Error ? error.message : "작업 범위를 다시 선택해 주세요.";
     }
   }
 
@@ -458,7 +467,7 @@ export function mountAiPanel(options: Options) {
     try {
       text = readPrompt();
       const scope = updateScope();
-      if (link.checked && !scope) throw new Error("작업할 범위를 200셀 안에서 선택해 주세요.");
+      if (link.checked && !scope) throw new Error($("ai-range").textContent || "시트를 준비한 뒤 다시 보내 주세요.");
       if (scope) selection = captureAISelection(scope.editor, scope.range);
     } catch (error) {
       showError((error as Error).message);
@@ -478,13 +487,19 @@ export function mountAiPanel(options: Options) {
       }
       if (encoder.encode(body).length > 65536)
         throw new Error("보낼 내용이 너무 길어요. 셀 범위나 메시지를 줄여 주세요.");
-      const response = await fetch("/api/ai", {
-        method: "POST",
-        redirect: "manual",
-        headers: { "Content-Type": "application/json" },
-        body,
-        signal: AbortSignal.any([request.signal, AbortSignal.timeout(45000)]),
-      });
+      let response: Response;
+      try {
+        response = await fetch("/api/ai", {
+          method: "POST",
+          redirect: "manual",
+          headers: { "Content-Type": "application/json" },
+          body,
+          signal: AbortSignal.any([request.signal, AbortSignal.timeout(45000)]),
+        });
+      } catch (error) {
+        if (error instanceof TypeError) throw new Error("AI 서버에 연결하지 못했어요. 잠시 후 다시 보내 주세요.");
+        throw error;
+      }
       if (request !== pending || !dialog.open) return;
       if (response.type === "opaqueredirect" || response.status === 401) {
         if (status?.managed) {
@@ -494,12 +509,13 @@ export function mountAiPanel(options: Options) {
         }
         throw new Error("로그인한 뒤 다시 보내 주세요.");
       }
-      if (!response.headers.get("content-type")?.includes("application/json"))
-        throw new Error("AI에 연결하지 못했어요. 잠시 후 다시 보내 주세요.");
-      const data = await response.json();
+      const data = response.headers.get("content-type")?.includes("application/json")
+        ? await response.json().catch(() => null)
+        : null;
       if (request !== pending || !dialog.open) return;
       if (!response.ok)
-        throw new Error(typeof data.error === "string" ? data.error : "답변을 받지 못했어요. 다시 보내 주세요.");
+        throw new Error(typeof data?.error === "string" ? data.error : responseError(response.status));
+      if (!data) throw new Error(responseError(response.status));
       if (typeof data.reply !== "string" || !data.reply.trim())
         throw new Error("답변이 비어 있어요. 다시 보내 주세요.");
       const edits = isTemplate && selection
@@ -528,7 +544,7 @@ export function mountAiPanel(options: Options) {
         error instanceof DOMException && error.name === "TimeoutError"
           ? "답변이 늦어지고 있어요. 잠시 후 다시 보내 주세요."
           : error instanceof TypeError
-            ? "AI에 연결하지 못했어요. 잠시 후 다시 보내 주세요."
+            ? "변경안을 적용하는 중 문제가 생겼어요. 범위를 확인하고 다시 보내 주세요."
             : error instanceof Error ? error.message : "답변을 받지 못했어요.",
       );
     } finally {
@@ -541,6 +557,9 @@ export function mountAiPanel(options: Options) {
     }
   });
   return {
+    refreshScope() {
+      if (dialog.open && !pending) updateScope();
+    },
     openInitial() {
       if (desktop.matches && stored("excel-workspace-ai-open") !== "false") void openPanel(false);
     },

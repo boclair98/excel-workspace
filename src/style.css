@@ -1494,6 +1494,9 @@ dialog h2 {
   .ribbon-view-actions > #appearance > span {
     display: none;
   }
+  .ribbon-view-actions > #workspace-fullscreen {
+    display: none;
+  }
   .ribbon-view-actions > button,
   .ribbon-view-actions > #full-tools {
     width: 44px;
@@ -1657,6 +1660,15 @@ dialog h2 {
   padding: 6px 8px;
   margin-left: auto;
   font-size: 13px;
+}
+.sheet-zoom-label {
+  margin-left: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+@media (max-width: 400px) {
+  .sheet-zoom-label { display: none; }
 }
 .statusbar {
   font-size: 11px;
@@ -2782,8 +2794,8 @@ dialog.history-dialog {
 }
 
 @media (min-width: 1000px) {
-  html { --ai-panel-width: 420px; }
-  html[data-ai-width="compact"] { --ai-panel-width: 360px; }
+  html { --ai-panel-width: min(420px, calc(100vw - 656px)); }
+  html[data-ai-width="compact"] { --ai-panel-width: 320px; }
   html.ai-panel-open #app { padding-right: var(--ai-panel-width); }
   .ai-dialog,
   [data-ai-width="wide"] .ai-dialog { width: var(--ai-panel-width); }
@@ -2795,32 +2807,32 @@ dialog.history-dialog {
   .topbar { min-height: 42px; gap: 10px; padding: 0 10px; }
   .brand { gap: 8px; }
   .brand > svg { width: 28px; height: 28px; padding: 5px; border-radius: 5px; }
-  .brand h1, .document-heading button { font-size: 14px; }
+  .brand h1, .document-heading button { font-size: 16px; }
   .filebar { min-height: 42px; padding: 3px 8px; gap: 4px; }
-  .filebar button { min-height: 32px; padding: 4px 8px; border-radius: 4px; }
+  .filebar button { min-height: 32px; padding: 4px 8px; border-radius: 4px; font-size: 14px; }
   .file-actions { gap: 2px; }
   .filebar .separator { margin-inline: 4px; }
   .ribbon-tabs { height: 32px; padding-inline: 8px; }
-  .ribbon-tab-list > [role="tab"] { height: 32px; min-height: 32px; padding: 4px 12px; }
-  .ribbon-view-actions > button { min-height: 28px; }
+  .ribbon-tab-list > [role="tab"] { height: 32px; min-height: 32px; padding: 4px 12px; font-size: 14px; }
+  .ribbon-view-actions > button { min-height: 28px; font-size: 13px; }
   .ribbon-panel { height: 64px; padding: 4px 6px 3px; }
   .ribbon-group { gap: 2px; padding: 0 9px; }
   .ribbon-controls { gap: 2px; }
-  .ribbon-controls button, .ribbon-controls .icon-btn { min-height: 30px; padding: 4px 6px; border-radius: 4px; }
-  .ribbon-controls select { height: 30px; padding: 3px 6px; border-radius: 4px; }
+  .ribbon-controls button, .ribbon-controls .icon-btn { min-height: 30px; padding: 4px 6px; border-radius: 4px; font-size: 14px; }
+  .ribbon-controls select { height: 30px; padding: 3px 6px; border-radius: 4px; font-size: 14px; }
   .ribbon-caption { line-height: 1.4; }
   [data-density="compact"] .ribbon-panel { height: 44px; }
   .formula { min-height: 32px; }
-  .formula #address { width: 80px; height: 31px; padding: 4px 6px; }
+  .formula #address { width: 90px; height: 31px; padding: 4px 6px; font-size: 14px; }
   .formula .fx { width: 32px; font-size: 20px; }
-  .formula #cell-input { min-height: 31px; padding: 4px 6px; }
+  .formula #cell-input { min-height: 31px; padding: 4px 6px; font-size: 15px; }
   .formula > button { min-height: 30px; padding: 4px 8px; }
   .sheetbar { min-height: 34px; padding-inline: 6px; gap: 2px; }
   .sheetbar button, .sheetbar select { min-height: 32px; padding: 4px 8px; border-radius: 4px; }
   .sheetbar .icon-btn { width: 34px; }
   .sheet-tabs { gap: 2px; }
   .sheet-tabs button { padding: 4px 16px; border-radius: 0; }
-  .statusbar { min-height: 24px; padding: 3px 10px; }
+  .statusbar { min-height: 24px; padding: 3px 10px; font-size: 12px; }
   :root:has([data-coders-support]) { --host-footer-space: 0px; }
   :root:has([data-coders-support]) .statusbar { min-height: 50px; padding-right: 224px; }
   :root:has([data-coders-support]) [data-coders-support] { bottom: max(env(safe-area-inset-bottom, 0px), 2px) !important; right: 8px !important; }

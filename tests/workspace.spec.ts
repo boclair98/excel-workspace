@@ -214,7 +214,7 @@ test('one chat prompt automatically applies values and a formula to XLSX and und
   await expect(page.locator('#ai-error')).toContainText('범위 밖');
   await expect(page.getByRole('button', { name: '엑셀에 적용' })).toHaveCount(0);
   expect(requests[0].mode).toBe('chat');
-  expect(JSON.parse(requests[0].context)).toEqual({ sheet: '채팅 적용 검증', range: 'B2:D3', values: [[12, '  접수  ', null], [null, null, 24]], formulas: [['', '', ''], ['', '', '=B2*2']] });
+  expect(JSON.parse(requests[0].context)).toEqual({ sheet: '채팅 적용 검증', range: 'B2:D3', values: [[12, '  접수  ', null], [null, null, 24]], formulas: [['', '', ''], ['', '', '=B2*2']], readOnly: ['D3'] });
   await page.getByRole('button', { name: '보내기', exact: true }).click();
   await expect(page.locator('.ai-plan-summary')).toContainText('3개 셀을 적용했어요');
   await expect(page.getByRole('table')).toContainText('=SUM(B2:B3)');
@@ -387,6 +387,12 @@ test('side chat opens alongside the sheet, resizes and remembers closed preferen
   const sheet = (await page.locator('.sheet-stage').boundingBox())!;
   const panel = (await chat.boundingBox())!;
   expect(sheet.x + sheet.width).toBeLessThan(panel.x);
+  expect(sheet.width).toBeGreaterThanOrEqual(1104);
+  const fullscreen = page.getByRole('button', { name: '전체 화면', exact: true });
+  await fullscreen.click();
+  await expect(page.getByRole('button', { name: '전체 화면 종료' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: '전체 화면 종료' }).click();
+  await expect(fullscreen).toHaveAttribute('aria-pressed', 'false');
   await separator.focus(); await separator.press('Home');
   expect((await chat.boundingBox())!.width).toBe(320);
   await separator.press('ArrowLeft');
@@ -406,4 +412,58 @@ test('side chat opens alongside the sheet, resizes and remembers closed preferen
   await page.locator('#ai-open').click(); await expect(chat).toBeVisible();
   await expect(separator).toBeHidden();
   await expect(page.locator('#ai-send')).toBeInViewport({ratio:1});
+});
+
+test('AI follows up on an existing table and recalculates the exported workbook', async ({ page }, info) => {
+  await page.route('**/api/status', route => route.fulfill({ json: { aiAvailable: true, provider: 'openai', managed: true, signedIn: true } }));
+  await page.route('**/api/ai', route => {
+    const request = route.request().postDataJSON();
+    const scope = JSON.parse(request.context);
+    if (!request.history.length) {
+      expect(scope.range).toBe('A1:J20');
+      return route.fulfill({ json: { reply: '지출표와 합계를 준비했어요.', edits: [
+        { address: 'A1', kind: 'set', value: '항목' },
+        { address: 'B1', kind: 'set', value: '금액' },
+        { address: 'A2', kind: 'set', value: '교통비' },
+        { address: 'B2', kind: 'set', value: 12000 },
+        { address: 'A3', kind: 'set', value: '식비' },
+        { address: 'B3', kind: 'set', value: 8000 },
+        { address: 'A4', kind: 'set', value: '합계' },
+        { address: 'B4', kind: 'formula', value: '=SUM(B2:B3)' },
+      ] } });
+    }
+    expect(scope.range).toBe('A1:C6');
+    expect(scope.anchor).toBe('B2');
+    expect(scope.values[1].slice(0, 2)).toEqual(['교통비', 12000]);
+    expect(scope.readOnly).toEqual(['B4']);
+    return route.fulfill({ json: { reply: '교통비를 바꾸고 평균을 추가할게요.', edits: [
+      { address: 'B2', kind: 'set', value: 15000 },
+      { address: 'A5', kind: 'set', value: '평균' },
+      { address: 'B5', kind: 'formula', value: '=AVERAGE(B2:B3)' },
+    ] } });
+  });
+  await page.goto('/'); await ready(page);
+  await page.locator('#ai-open').click();
+  const prompt = page.getByLabel('메시지', { exact: true });
+  await expect(page.locator('#ai-send')).toBeEnabled();
+  await prompt.fill('지출표와 합계를 만들어줘.');
+  await prompt.press('Enter');
+  await expect(page.locator('.ai-plan-summary').last()).toContainText('8개 셀을 적용했어요');
+  await selectCell(page, 'B2');
+  await expect(page.locator('#ai-range')).toHaveText('작업 범위 A1:C6');
+  await prompt.fill('교통비를 15000원으로 바꾸고, 합계 아래에 평균도 수식으로 넣어줘.');
+  await prompt.press('Enter');
+  await expect(page.locator('.ai-plan-summary').last()).toContainText('3개 셀을 적용했어요');
+  await selectCell(page, 'B5');
+  await expect(page.locator('#selection-status')).toContainText('11,500');
+  const sheet = (await downloadedBook(page, info, 'ai-follow-up.xlsx')).worksheets[0];
+  expect(sheet.getCell('B2').value).toBe(15000);
+  expect(sheet.getCell('B4').result).toBe(23000);
+  expect(sheet.getCell('B5').formula).toBe('AVERAGE(B2:B3)');
+  expect(sheet.getCell('B5').result).toBe(11500);
+  await page.locator('#undo').click();
+  await selectCell(page, 'B2');
+  await expect(page.locator('#cell-input')).toHaveValue('12000');
+  await selectCell(page, 'B5');
+  await expect(page.locator('#cell-input')).toHaveValue('');
 });

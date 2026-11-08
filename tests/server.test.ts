@@ -31,7 +31,7 @@ test('AI provider request forwards trusted identity, limits context and parses r
   let body: Record<string, unknown> = {}; let headers: Record<string, string> = {};
   const request = async (url: string, init: RequestInit) => { assert.equal(url, 'https://example.invalid/llm/v1/messages'); assert.equal(init.redirect, 'error'); body = JSON.parse(init.body as string); headers = init.headers as Record<string, string>; return new Response(JSON.stringify({ content: [{ type: 'text', text: '{"explanation":"합계 수식입니다.","formula":"=SUM(B2:B10)"}' }] }), { headers: { 'content-type': 'application/json' } }); };
   const result = await askAI({ prompt: 'B2:B10 합계', context: '' }, 'test-user', { ANTHROPIC_API_KEY: 'unit-test-placeholder', ANTHROPIC_BASE_URL: 'https://example.invalid/llm' }, request);
-  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.9.0'); assert.equal(body.max_tokens, 1200);
+  assert.equal(result.status, 200); assert.equal(result.body.formula, '=SUM(B2:B10)'); assert.equal(headers['X-Coders-User'], 'test-user'); assert.equal(headers['User-Agent'], 'Excel-Workspace/0.10.0'); assert.equal(body.max_tokens, 1200);
 });
 const editContext = JSON.stringify({
   sheet: '품목', range: 'B2:C3',
@@ -70,7 +70,8 @@ test('OpenAI chat forwards only text turns and returns a plain draft', async () 
 });
 
 test('chat proposes scoped cell updates and safe formulas in the same reply', async () => {
-  const input = { mode: 'chat', prompt: 'B2를 12로 채우고 C3에 B2의 합계 수식을 넣어 줘.', context: editContext };
+  const context = JSON.stringify({ ...JSON.parse(editContext), anchor: 'b2', readOnly: ['c2'] });
+  const input = { mode: 'chat', prompt: 'B2를 12로 채우고 C3에 B2의 합계 수식을 넣어 줘.', context };
   const edits = [
     { address: 'B2', kind: 'set', value: 12 },
     { address: 'C3', kind: 'formula', value: '=SUM(B2:B2)' },
@@ -81,15 +82,26 @@ test('chat proposes scoped cell updates and safe formulas in the same reply', as
     const body = JSON.parse(init.body as string);
     assert.equal(body.text.format.name, 'spreadsheet_chat');
     assert.equal(body.text.format.strict, true);
-    assert.deepEqual(body.input, [{ role: 'user', content: JSON.stringify({ request: input.prompt, selection: JSON.parse(editContext) }) }]);
+    assert.deepEqual(JSON.parse(body.input[0].content), {
+      request: input.prompt,
+      selection: {
+        sheet: '품목', range: 'B2:C3', anchor: 'B2',
+        cells: [
+          { address: 'C2', value: '  사과  ', readOnly: true },
+          { address: 'B3', value: 5, formula: '=SUM(A1:A2)', readOnly: true },
+          { address: 'C3', value: '삭제' },
+        ],
+      },
+    });
     return output(edits);
   });
   assert.deepEqual(result, { status: 200, body: { reply: explanation, edits, provider: 'openai' } });
   for (const edit of [
     { address: 'A1', kind: 'set', value: 1 },
     { address: 'B3', kind: 'clear', value: null },
+    { address: 'C2', kind: 'set', value: 1 },
     { address: 'C3', kind: 'formula', value: '=WEBSERVICE("https://example.invalid")' },
-  ]) assert.equal((await askAI(input, undefined, openAIConfig, async () => output([edits[0], edit]))).status, 502);
+  ]) assert.equal((await askAI(input, undefined, openAIConfig, async () => output([edits[0], edit]))).status, 422);
 });
 
 test('managed Claude chat revises a draft in the same thread', async () => {

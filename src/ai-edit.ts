@@ -18,6 +18,7 @@ type Cell = {
   protected: boolean;
 };
 type Change = { address: string; cell: Cell; after: Value; formula: string | null };
+const MAX_AI_CELLS = 200;
 
 function protectedCell(
   sheet: IWorkbookData["sheets"][string],
@@ -53,12 +54,24 @@ export function resolveAIRange(editor: Editor, prompt: string) {
   if (!addresses.length) {
     const bounds = selected.getRange();
     if (bounds.startRow === bounds.endRow && bounds.startColumn === bounds.endColumn) {
-      const rows = Math.min(20, sheet.getMaxRows() - bounds.startRow);
-      const cols = Math.min(10, sheet.getMaxColumns() - bounds.startColumn);
-      const candidate = sheet.getRange(bounds.startRow, bounds.startColumn, rows, cols);
-      const empty = candidate.getCellDataGrid().every(row => row.every(cell =>
-        cell?.v == null && !cell?.f && !cell?.p && !cell?.si));
-      if (empty) range = sheet.getRange(bounds.startRow, bounds.startColumn, rows, cols);
+      range = selected.getDataRegion();
+      const { startRow, startColumn, endRow, endColumn } = range.getRange();
+      const maxRows = Math.min(sheet.getMaxRows(), LIMITS.rows);
+      const maxCols = Math.min(sheet.getMaxColumns(), LIMITS.cols);
+      let rows = endRow - startRow + 1;
+      let cols = endColumn - startColumn + 1;
+      if (rows === 1 && cols === 1 && range.isBlank()) {
+        const blank = sheet.getRange(startRow, startColumn, Math.min(20, maxRows - startRow), Math.min(10, maxCols - startColumn));
+        if (blank.isBlank()) range = blank;
+      } else {
+        for (let padding = 0; padding < 2 && startRow + rows < maxRows && (rows + 1) * cols <= MAX_AI_CELLS; padding++) {
+          if (!sheet.getRange(startRow + rows, startColumn, 1, cols).isBlank()) break;
+          rows++;
+        }
+        if (startColumn + cols < maxCols && rows * (cols + 1) <= MAX_AI_CELLS &&
+            sheet.getRange(startRow, startColumn + cols, rows, 1).isBlank()) cols++;
+        range = sheet.getRange(startRow, startColumn, rows, cols);
+      }
     }
   }
   if (addresses.length) {
@@ -71,7 +84,7 @@ export function resolveAIRange(editor: Editor, prompt: string) {
   }
   const bounds = range.getRange();
   if (
-    (bounds.endRow - bounds.startRow + 1) * (bounds.endColumn - bounds.startColumn + 1) > 200 ||
+    (bounds.endRow - bounds.startRow + 1) * (bounds.endColumn - bounds.startColumn + 1) > MAX_AI_CELLS ||
     bounds.endRow >= LIMITS.rows ||
     bounds.endColumn >= LIMITS.cols
   )
@@ -93,6 +106,7 @@ export function captureAISelection(editor: Editor, range: ReturnType<typeof reso
   const cells = new Map<string, Cell>();
   const values: Value[][] = [];
   const formulas: string[][] = [];
+  const readOnly: string[] = [];
   for (let row = bounds.startRow; row <= bounds.endRow; row++) {
     const rowValues: Value[] = [];
     const rowFormulas: string[] = [];
@@ -103,12 +117,15 @@ export function captureAISelection(editor: Editor, range: ReturnType<typeof reso
         cell?.t === CellValueType.BOOLEAN && value != null
           ? Boolean(value)
           : value;
-      cells.set(cellAddress(row, col), {
+      const address = cellAddress(row, col);
+      const protectedValue = protectedCell(sheet, row, col);
+      if (protectedValue) readOnly.push(address);
+      cells.set(address, {
         row,
         col,
         before,
         fingerprint: cellFingerprint(cell),
-        protected: protectedCell(sheet, row, col),
+        protected: protectedValue,
       });
       rowValues.push(before);
       rowFormulas.push(cell?.f ?? "");
@@ -117,11 +134,15 @@ export function captureAISelection(editor: Editor, range: ReturnType<typeof reso
     formulas.push(rowFormulas);
   }
   const label = range.getA1Notation();
+  const active = editor.current().getActiveSheet().getActiveCell()?.getRange();
+  const anchor = active && cellAddress(active.startRow, active.startColumn);
   const context = JSON.stringify({
     sheet: sheet.name,
     range: label,
     values,
     formulas,
+    ...(anchor && cells.has(anchor) ? { anchor } : {}),
+    ...(readOnly.length ? { readOnly } : {}),
   });
   if (context.length > 16000)
     throw new Error("선택한 내용이 너무 깁니다. 범위를 줄여 주세요.");
